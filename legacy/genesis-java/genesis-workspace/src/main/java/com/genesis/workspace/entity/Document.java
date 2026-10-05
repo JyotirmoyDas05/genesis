@@ -1,0 +1,178 @@
+package com.genesis.workspace.entity;
+
+import com.genesis.common.entity.BaseEntity;
+import com.genesis.infra.storage.StoredFile;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+
+/**
+ * Document entity representing a file within a workspace.
+ *
+ * <p>
+ * Documents are ordered by their orderIndex which is assigned based on upload
+ * time.
+ * All documents in a workspace are treated as one continuous annotation task
+ * with
+ * token indices spanning across document boundaries.
+ */
+@Entity
+@Table(name = "documents", indexes = {
+        // idx_documents_workspace_id (workspace_id alone) dropped as redundant — the
+        // composite idx_documents_order_index (workspace_id, order_index) already serves
+        // workspace_id lookups via the leftmost-prefix rule (F-DB-05). See migration V7.
+        @Index(name = "idx_documents_status", columnList = "status"),
+        @Index(name = "idx_documents_order_index", columnList = "workspace_id, order_index")
+})
+public class Document extends BaseEntity {
+
+    @Column(nullable = false)
+    private String name;
+
+    @Column(name = "order_index", nullable = false)
+    private int orderIndex;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private DocumentStatus status = DocumentStatus.UPLOADED;
+
+    @Column(name = "progress")
+    private Double progress = 0.0;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workspace_id", nullable = false)
+    private Workspace workspace;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stored_file_id")
+    private StoredFile storedFile;
+
+    /**
+     * First token index in this document (for continuous tokenization).
+     */
+    @Column(name = "token_start_index")
+    private Integer tokenStartIndex;
+
+    /**
+     * Last token index in this document (for continuous tokenization).
+     */
+    @Column(name = "token_end_index")
+    private Integer tokenEndIndex;
+
+    /**
+     * Processing status for async tokenization.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_status", length = 20)
+    private ProcessingStatus processingStatus = ProcessingStatus.PENDING;
+
+    /**
+     * Error message if processing failed.
+     */
+    @Column(name = "processing_error", length = 1000)
+    private String processingError;
+
+    // Default constructor required by JPA
+    public Document() {
+    }
+
+    // Getters and Setters
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public int getOrderIndex() {
+        return orderIndex;
+    }
+
+    public void setOrderIndex(int orderIndex) {
+        this.orderIndex = orderIndex;
+    }
+
+    public DocumentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(DocumentStatus status) {
+        this.status = status;
+    }
+
+    public Double getProgress() {
+        return progress;
+    }
+
+    public void setProgress(Double progress) {
+        this.progress = progress;
+    }
+
+    public Workspace getWorkspace() {
+        return workspace;
+    }
+
+    public void setWorkspace(Workspace workspace) {
+        this.workspace = workspace;
+    }
+
+    public StoredFile getStoredFile() {
+        return storedFile;
+    }
+
+    public void setStoredFile(StoredFile storedFile) {
+        this.storedFile = storedFile;
+    }
+
+    public Integer getTokenStartIndex() {
+        return tokenStartIndex;
+    }
+
+    public void setTokenStartIndex(Integer tokenStartIndex) {
+        this.tokenStartIndex = tokenStartIndex;
+    }
+
+    public Integer getTokenEndIndex() {
+        return tokenEndIndex;
+    }
+
+    public void setTokenEndIndex(Integer tokenEndIndex) {
+        this.tokenEndIndex = tokenEndIndex;
+    }
+
+    public ProcessingStatus getProcessingStatus() {
+        return processingStatus;
+    }
+
+    public void setProcessingStatus(ProcessingStatus processingStatus) {
+        this.processingStatus = processingStatus;
+    }
+
+    public String getProcessingError() {
+        return processingError;
+    }
+
+    public void setProcessingError(String processingError) {
+        this.processingError = processingError;
+    }
+
+    public Long getFileSize() {
+        return fileSize;
+    }
+
+    public void setFileSize(Long fileSize) {
+        this.fileSize = fileSize;
+    }
+}

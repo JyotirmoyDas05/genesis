@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <!-- Property for correlation ID in log pattern -->
+  <property name="LOG_PATTERN" 
+            value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n"/>
+
+  <!-- Console appender -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>${LOG_PATTERN}</pattern>
+    </encoder>
+  </appender>
+
+  <!-- File appender for production (optional) -->
+  <springProfile name="prod">
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+      <file>logs/genesis.log</file>
+      <!-- Size-AND-time based: roll daily and whenever a day's file exceeds
+           maxFileSize, so a single high-traffic day can't grow unbounded.
+           maxHistory keeps 30 days of archives; totalSizeCap is a hard ceiling
+           across all archives — whichever limit hits first triggers deletion of
+           the oldest files. Disk use stays bounded with zero manual cleanup. -->
+      <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+        <fileNamePattern>logs/genesis.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+        <maxFileSize>50MB</maxFileSize>
+        <maxHistory>30</maxHistory>
+        <totalSizeCap>2GB</totalSizeCap>
+      </rollingPolicy>
+      <encoder>
+        <pattern>${LOG_PATTERN}</pattern>
+      </encoder>
+    </appender>
+
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+  <!-- Development profile -->
+  <springProfile name="dev">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+    
+    <!-- Debug level for Genesis packages -->
+    <logger name="com.genesis" level="DEBUG"/>
+  </springProfile>
+
+  <!-- Default (no profile) -->
+  <springProfile name="default">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+    </root>
+  </springProfile>
+</configuration>

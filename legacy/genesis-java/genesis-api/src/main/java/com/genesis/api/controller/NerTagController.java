@@ -1,0 +1,67 @@
+package com.genesis.api.controller;
+
+import com.genesis.api.security.AuthenticatedUserResolver;
+import com.genesis.common.response.ApiResponse;
+import com.genesis.ner.dto.CreateNerTagRequest;
+import com.genesis.ner.dto.NerTagDefinitionDto;
+import com.genesis.ner.service.NerTagDefinitionService;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * CRUD for custom NER tag definitions. The 18 OntoNotes 5 entity types are
+ * always-available built-ins; this controller manages additive workspace-local
+ * and global customs.
+ */
+@RestController
+@RequestMapping("/api/ner-tags")
+public class NerTagController {
+
+    private final NerTagDefinitionService definitionService;
+    private final AuthenticatedUserResolver userResolver;
+
+    public NerTagController(NerTagDefinitionService definitionService,
+            AuthenticatedUserResolver userResolver) {
+        this.definitionService = definitionService;
+        this.userResolver = userResolver;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<NerTagDefinitionDto>> create(
+            @Valid @RequestBody CreateNerTagRequest request) {
+        NerTagDefinitionDto created = definitionService.create(request, currentUserId());
+        return ResponseEntity.ok(ApiResponse.success(created));
+    }
+
+    /**
+     * Effective NER tag list for the caller. With {@code workspaceId} the
+     * response includes built-ins + global customs + that workspace's customs.
+     * Without it, only built-ins + global customs.
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<NerTagDefinitionDto>>> list(
+            @RequestParam(value = "workspaceId", required = false) UUID workspaceId) {
+        return ResponseEntity.ok(
+                ApiResponse.success(definitionService.listForWorkspace(workspaceId, currentUserId())));
+    }
+
+    @DeleteMapping("/{definitionId}")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID definitionId) {
+        definitionService.delete(definitionId, currentUserId());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    private UUID currentUserId() {
+        return userResolver.currentUserId();
+    }
+}

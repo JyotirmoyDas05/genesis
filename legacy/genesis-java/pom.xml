@@ -1,0 +1,81 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.genesis</groupId>
+  <artifactId>genesis</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>genesis-api</module>
+    <module>genesis-common</module>
+    <module>genesis-user</module>
+    <module>genesis-workspace</module>
+    <module>genesis-coref</module>
+    <module>genesis-import-export</module>
+    <module>genesis-infra</module>
+    <module>genesis-editor</module>
+    <module>genesis-notification</module>
+    <module>genesis-pos</module>
+    <module>genesis-logging</module>
+    <module>genesis-wsd</module>
+    <module>genesis-recommend</module>
+    <module>genesis-ner</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <spring.boot.version>3.3.3</spring.boot.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring.boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-maven-plugin</artifactId>
+          <version>${spring.boot.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.11.0</version>
+          <configuration>
+            <source>${java.version}</source>
+            <target>${java.version}</target>
+            <encoding>UTF-8</encoding>
+            <parameters>true</parameters>
+          </configuration>
+        </plugin>
+        <!-- Byte Buddy / Mockito needs experimental mode when tests run on a JDK
+             newer than the compiler target (Java 21). Lives here so every module's
+             `mvn test` inherits it without the wrapper scripts having to pass
+             -DargLine. If a coverage agent (e.g. JaCoCo prepare-agent) is added
+             later, switch this to "@{argLine} -Dnet.bytebuddy.experimental=true"
+             so its agent argLine is preserved rather than overwritten. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.2.5</version>
+          <configuration>
+            <argLine>-Dnet.bytebuddy.experimental=true</argLine>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

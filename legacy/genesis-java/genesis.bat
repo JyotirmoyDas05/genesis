@@ -1,0 +1,85 @@
+@echo off
+setlocal
+
+REM Genesis Project Management Script
+
+if "%1"=="" goto help
+
+if "%1"=="build" goto build
+if "%1"=="clean" goto clean
+if "%1"=="test" goto test
+if "%1"=="install" goto install
+if "%1"=="run" goto run
+if "%1"=="db" goto db
+if "%1"=="db-stop" goto db_stop
+if "%1"=="docker-build" goto docker_build
+if "%1"=="docker-run" goto docker_run
+if "%1"=="help" goto help
+
+echo Unknown command: %1
+goto help
+
+:build
+echo Building the project...
+call .\mvnw.cmd clean install -DskipTests
+goto end
+
+:clean
+echo Cleaning the project...
+call .\mvnw.cmd clean
+goto end
+
+:test
+echo Running all tests...
+call .\mvnw.cmd test
+goto end
+
+:install
+echo Installing the project (with tests)...
+call .\mvnw.cmd clean install
+goto end
+
+:run
+echo Running the application...
+REM .env is loaded automatically by spring-dotenv (on the classpath) at startup.
+call .\mvnw.cmd spring-boot:run -pl genesis-api
+goto end
+
+:db
+echo Starting PostgreSQL database...
+docker compose up -d postgres
+echo PostgreSQL is starting on port 5432...
+echo Use 'genesis.bat db-stop' to stop the database
+goto end
+
+:db_stop
+echo Stopping PostgreSQL database...
+docker compose down
+goto end
+
+:docker_build
+echo Building Docker image...
+docker build -t genesis .
+goto end
+
+:docker_run
+echo Running Docker container...
+docker run -p 8080:8080 genesis
+goto end
+
+:help
+echo Usage: genesis.bat [command]
+echo Commands:
+echo   build        - Build the entire project (skips tests)
+echo   clean        - Clean build artifacts
+echo   test         - Run all unit and integration tests
+echo   install      - Clean install (runs tests and builds artifacts)
+echo   run          - Run the application locally
+echo   db           - Start PostgreSQL database (docker compose)
+echo   db-stop      - Stop PostgreSQL database
+echo   docker-build - Build the Docker image
+echo   docker-run   - Run the application in Docker
+goto end
+
+:end
+endlocal

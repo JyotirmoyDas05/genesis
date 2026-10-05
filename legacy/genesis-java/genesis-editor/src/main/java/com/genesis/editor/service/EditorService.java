@@ -1,0 +1,315 @@
+package com.genesis.editor.service;
+
+import com.genesis.editor.dto.DocumentContentResponse;
+import com.genesis.editor.dto.EditorDocumentInfo;
+import com.genesis.editor.dto.EditorSessionResponse;
+import com.genesis.editor.dto.WorkspaceEditorResponse;
+import com.genesis.editor.entity.EditorSession;
+import com.genesis.editor.repository.EditorSessionRepository;
+import com.genesis.importexport.dto.SentenceDto;
+import com.genesis.importexport.dto.TokenDto;
+import com.genesis.importexport.entity.SentenceEntity;
+import com.genesis.importexport.entity.TokenEntity;
+import com.genesis.importexport.service.ImportService;
+import com.genesis.workspace.dto.DocumentResponse;
+import com.genesis.workspace.service.DocumentService;
+import com.genesis.workspace.service.WorkspaceService;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.lang.NonNull;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Service for managing editor sessions and serving document content.
+ */
+@Service
+public class EditorService {
+
+    /** Default page size for paginated document content (sentences per page). */
+    public static final int DEFAULT_PAGE_SIZE = 50;
+
+    private final EditorSessionRepository editorSessionRepository;
+    private final ImportService importService;
+    private final DocumentService documentService;
+    private final WorkspaceService workspaceService;
+
+    public EditorService(EditorSessionRepository editorSessionRepository,
+            ImportService importService,
+            DocumentService documentService,
+            WorkspaceService workspaceService) {
+        this.editorSessionRepository = editorSessionRepository;
+        this.importService = importService;
+        this.documentService = documentService;
+        this.workspaceService = workspaceService;
+    }
+
+    /**
+     * Open a workspace in the editor.
+     * Returns session info, documents list, and aggregate stats.
+     */
+    @Transactional
+    public WorkspaceEditorResponse openWorkspace(@NonNull UUID workspaceId, @NonNull UUID userId) {
+        // Get or create session
+        EditorSession session = editorSessionRepository
+                .findByWorkspaceIdAndUserId(workspaceId, userId)
+                .orElseGet(() -> {
+                    EditorSession newSession = new EditorSession();
+                    newSession.setWorkspaceId(workspaceId);
+                    newSession.setUserId(userId);
+                    newSession.setLastDocumentIndex(0);
+                    newSession.setScrollPosition(0);
+                    newSession.setLastAccessedAt(Instant.now());
+                    return newSession;
+                });
+
+        session.setLastAccessedAt(Instant.now());
+        EditorSession savedSession = editorSessionRepository.save(session);
+
+        // Get workspace info — caller is the same user the session is scoped to
+        var workspaceInfo = workspaceService.getById(workspaceId, userId);
+
+        // Get all documents
+        List<DocumentResponse> documents = documentService.getByWorkspaceIdInternal(workspaceId);
+
+        // Build document info with token counts
+        List<EditorDocumentInfo> documentInfos = new ArrayList<>();
+        int totalSentences = 0;
+        int totalTokens = 0;
+        int tokenizedDocuments = 0;
+
+        for (DocumentResponse doc : documents) {
+            EditorDocumentInfo info = new EditorDocumentInfo();
+            info.setId(doc.getId());
+            info.setName(doc.getName());
+            info.setOrderIndex(doc.getOrderIndex());
+            info.setStatus(doc.getStatus() != null ? doc.getStatus().name() : "UNKNOWN");
+
+            // Check if tokenized
+            boolean isTokenized = importService.isTokenized(doc.getId());
+            info.setIsTokenized(isTokenized);
+
+            if (isTokenized) {
+                int sentenceCount = (int) importService.getSentenceCount(doc.getId());
+                int tokenCount = (int) importService.getTokenCount(doc.getId());
+                info.setSentenceCount(sentenceCount);
+                info.setTokenCount(tokenCount);
+                totalSentences += sentenceCount;
+                totalTokens += tokenCount;
+                tokenizedDocuments++;
+            } else {
+                info.setSentenceCount(0);
+                info.setTokenCount(0);
+            }
+
+            documentInfos.add(info);
+        }
+
+        // Build response
+        WorkspaceEditorResponse response = new WorkspaceEditorResponse();
+        response.setWorkspaceId(workspaceId);
+        response.setWorkspaceName(workspaceInfo.getName());
+        response.setSession(mapToSessionResponse(savedSession));
+        response.setDocuments(documentInfos);
+        response.setTotalDocuments(documents.size());
+        response.setTotalSentences(totalSentences);
+        response.setTotalTokens(totalTokens);
+        response.setTokenizedDocuments(tokenizedDocuments);
+        response.setLastAccessedAt(savedSession.getLastAccessedAt());
+
+        return response;
+    }
+
+    /**
+     * Get document content with tokens for display (default first page).
+     */
+    public DocumentContentResponse getDocumentContent(@NonNull UUID documentId) {
+        return getDocumentContent(documentId, 0, DEFAULT_PAGE_SIZE);
+    }
+
+    /**
+     * Get a page of document content (sentences + their tokens) for lazy loading.
+     *
+     * @param page zero-based page index
+     * @param size number of sentences per page
+     */
+    public DocumentContentResponse getDocumentContent(@NonNull UUID documentId, int page, int size) {
+        if (page < 0) page = 0;
+        if (size <= 0) size = DEFAULT_PAGE_SIZE;
+
+        DocumentResponse docInfo = documentService.getByIdInternal(documentId);
+
+        long totalSentences = importService.getSentenceCount(documentId);
+        long totalTokens = importService.getTokenCount(documentId);
+        int totalPages = totalSentences == 0 ? 0 : (int) Math.ceil((double) totalSentences / size);
+
+        List<SentenceEntity> pageSentences = importService.getSentencesPage(documentId, page, size);
+
+        List<TokenEntity> pageTokens;
+        if (pageSentences.isEmpty()) {
+            pageTokens = List.of();
+        } else {
+            int startIdx = pageSentences.get(0).getSentenceIndex();
+            int endIdx = pageSentences.get(pageSentences.size() - 1).getSentenceIndex();
+            pageTokens = importService.getTokensInSentenceRange(documentId, startIdx, endIdx);
+        }
+
+        DocumentContentResponse response = new DocumentContentResponse();
+        response.setDocumentId(documentId);
+        response.setDocumentName(docInfo.getName());
+        response.setOrderIndex(docInfo.getOrderIndex());
+        response.setSentences(pageSentences.stream().map(this::mapToSentenceDto).collect(Collectors.toList()));
+        response.setTokens(pageTokens.stream().map(this::mapToTokenDto).collect(Collectors.toList()));
+        response.setTotalSentences((int) totalSentences);
+        response.setTotalTokens((int) totalTokens);
+        response.setGlobalTokenOffset(0); // Will be calculated per-workspace if needed
+        response.setCurrentPage(page);
+        response.setTotalPages(totalPages);
+        response.setPageSize(size);
+
+        return response;
+    }
+
+    /**
+     * Get document content with workspace-level token offset (default first page).
+     */
+    public DocumentContentResponse getDocumentContentWithOffset(@NonNull UUID workspaceId,
+            @NonNull UUID documentId) {
+        return getDocumentContentWithOffset(workspaceId, documentId, 0, DEFAULT_PAGE_SIZE);
+    }
+
+    /**
+     * Get a page of document content with workspace-level token offset.
+     */
+    public DocumentContentResponse getDocumentContentWithOffset(@NonNull UUID workspaceId,
+            @NonNull UUID documentId, int page, int size) {
+        DocumentContentResponse response = getDocumentContent(documentId, page, size);
+
+        // The global token offset is the document's first global token index, which
+        // tokenization already stored on the document. Read it directly instead of
+        // re-summing the token counts of every preceding document (C-009 O(N) loop).
+        // Null when the document is not yet tokenized → offset 0. workspaceId is kept
+        // for API symmetry with the controller; the offset is a property of the document.
+        DocumentResponse doc = documentService.getByIdInternal(documentId);
+        Integer tokenStartIndex = doc.getTokenStartIndex();
+        response.setGlobalTokenOffset(tokenStartIndex != null ? tokenStartIndex : 0);
+        return response;
+    }
+
+    /**
+     * Get all documents info for a workspace.
+     */
+    public List<EditorDocumentInfo> getWorkspaceDocuments(@NonNull UUID workspaceId) {
+        List<DocumentResponse> documents = documentService.getByWorkspaceIdInternal(workspaceId);
+        List<EditorDocumentInfo> result = new ArrayList<>();
+
+        for (DocumentResponse doc : documents) {
+            EditorDocumentInfo info = new EditorDocumentInfo();
+            info.setId(doc.getId());
+            info.setName(doc.getName());
+            info.setOrderIndex(doc.getOrderIndex());
+            info.setStatus(doc.getStatus() != null ? doc.getStatus().name() : "UNKNOWN");
+
+            boolean isTokenized = importService.isTokenized(doc.getId());
+            info.setIsTokenized(isTokenized);
+
+            if (isTokenized) {
+                info.setSentenceCount((int) importService.getSentenceCount(doc.getId()));
+                info.setTokenCount((int) importService.getTokenCount(doc.getId()));
+            } else {
+                info.setSentenceCount(0);
+                info.setTokenCount(0);
+            }
+
+            result.add(info);
+        }
+
+        return result;
+    }
+
+    /**
+     * Get the current session for a user and workspace.
+     */
+    public Optional<EditorSessionResponse> getSession(@NonNull UUID workspaceId, @NonNull UUID userId) {
+        return editorSessionRepository.findByWorkspaceIdAndUserId(workspaceId, userId)
+                .map(this::mapToSessionResponse);
+    }
+
+    /**
+     * Save session state.
+     */
+    @Transactional
+    public EditorSessionResponse saveSession(@NonNull UUID workspaceId, @NonNull UUID userId,
+            Integer documentIndex, Integer scrollPosition) {
+        EditorSession session = editorSessionRepository
+                .findByWorkspaceIdAndUserId(workspaceId, userId)
+                .orElseGet(() -> {
+                    EditorSession newSession = new EditorSession();
+                    newSession.setWorkspaceId(workspaceId);
+                    newSession.setUserId(userId);
+                    return newSession;
+                });
+
+        if (documentIndex != null) {
+            session.setLastDocumentIndex(documentIndex);
+        }
+        if (scrollPosition != null) {
+            session.setScrollPosition(scrollPosition);
+        }
+        session.setLastAccessedAt(Instant.now());
+
+        EditorSession saved = editorSessionRepository.save(session);
+        return mapToSessionResponse(saved);
+    }
+
+    /**
+     * Close/clear the session for a workspace.
+     */
+    @Transactional
+    public void closeSession(@NonNull UUID workspaceId, @NonNull UUID userId) {
+        editorSessionRepository.deleteByWorkspaceIdAndUserId(workspaceId, userId);
+    }
+
+    private EditorSessionResponse mapToSessionResponse(EditorSession session) {
+        EditorSessionResponse response = new EditorSessionResponse();
+        response.setId(session.getId());
+        response.setWorkspaceId(session.getWorkspaceId());
+        response.setUserId(session.getUserId());
+        response.setLastDocumentIndex(session.getLastDocumentIndex());
+        response.setScrollPosition(session.getScrollPosition());
+        response.setLastAccessedAt(session.getLastAccessedAt());
+        return response;
+    }
+
+    private SentenceDto mapToSentenceDto(SentenceEntity entity) {
+        SentenceDto dto = new SentenceDto();
+        dto.setId(entity.getId());
+        dto.setDocumentId(entity.getDocumentId());
+        dto.setSentenceIndex(entity.getSentenceIndex());
+        dto.setText(entity.getText());
+        dto.setStartOffset(entity.getStartOffset());
+        dto.setEndOffset(entity.getEndOffset());
+        dto.setTokenCount(entity.getTokenCount());
+        return dto;
+    }
+
+    private TokenDto mapToTokenDto(TokenEntity entity) {
+        TokenDto dto = new TokenDto();
+        dto.setId(entity.getId());
+        dto.setDocumentId(entity.getDocumentId());
+        dto.setSentenceIndex(entity.getSentenceIndex());
+        dto.setTokenIndex(entity.getTokenIndex());
+        dto.setGlobalIndex(entity.getGlobalIndex());
+        dto.setForm(entity.getForm());
+        dto.setPos(entity.getPos());
+        dto.setLemma(entity.getLemma());
+        dto.setNerTag(entity.getNerTag());
+        dto.setStartOffset(entity.getStartOffset());
+        dto.setEndOffset(entity.getEndOffset());
+        return dto;
+    }
+}
