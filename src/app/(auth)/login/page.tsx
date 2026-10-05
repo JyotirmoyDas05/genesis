@@ -51,10 +51,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-50 via-white to-purple-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950 relative overflow-hidden">
       {/* Decorative background elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[var(--primary)] opacity-10 rounded-full blur-3xl"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary opacity-10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500 opacity-10 rounded-full blur-3xl"></div>
       </div>
 
@@ -133,7 +133,7 @@ export default function LoginPage() {
               </label>
               <Link
                 href="#"
-                className="text-[var(--primary)] hover:text-[var(--primary-dark)] transition-colors font-semibold"
+                className="text-primary hover:text-primary-dark transition-colors font-semibold"
               >
                 Forgot password?
               </Link>
@@ -170,7 +170,7 @@ export default function LoginPage() {
             </div>
             <Link
               href="/signup"
-              className="mt-4 inline-block text-[var(--primary)] hover:text-[var(--primary-dark)]
+              className="mt-4 inline-block text-primary hover:text-primary-dark
                        font-semibold transition-colors"
             >
               Create an account

@@ -137,12 +137,12 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
   const renderWorkspaceCard = (workspace: WorkspaceResponse) => (
     <Card
       key={workspace.id}
-      className="hover:shadow-xl hover:shadow-[var(--primary)]/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-[var(--primary)]/30"
+      className="hover:shadow-xl hover:shadow-(--primary)/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-(--primary)/30"
       onClick={() => router.push(`/workspace/${workspace.id}`)}
     >
       <CardHeader>
         <div className="flex items-start justify-between mb-3">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--primary)] via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-[var(--primary)]/20">
+          <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-(--primary)/20">
             {workspace.name.charAt(0).toUpperCase()}
           </div>
         </div>
@@ -161,11 +161,11 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
           <div>
             <div className="flex justify-between text-sm mb-2">
               <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-              <span className="font-bold text-[var(--primary)] dark:text-[var(--primary-light)]">{workspace.progressPercentage}%</span>
+              <span className="font-bold text-primary dark:text-primary-light">{workspace.progressPercentage}%</span>
             </div>
             <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[var(--primary)] to-purple-600 rounded-full transition-all duration-500 shadow-sm"
+                className="h-full bg-linear-to-r from-primary to-purple-600 rounded-full transition-all duration-500 shadow-sm"
                 style={{ width: `${workspace.progressPercentage}%` }}
               />
             </div>
@@ -185,7 +185,7 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-8">
@@ -204,7 +204,7 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Avatar aria-label="User menu" className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
-                  <AvatarFallback className="bg-gradient-to-br from-[var(--primary)] to-purple-600 text-white font-bold">
+                  <AvatarFallback className="bg-linear-to-br from-primary to-purple-600 text-white font-bold">
                     {getUserInitials()}
                   </AvatarFallback>
                 </Avatar>
@@ -364,8 +364,8 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
 
             {recentWorkspaces.length === 0 && (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-20 h-20 bg-linear-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                  <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
@@ -386,8 +386,8 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
 
             {filteredWorkspaces.length === 0 && (
               <div className="text-center py-16">
-                <div className="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-[var(--primary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="w-20 h-20 bg-linear-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
+                  <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
