@@ -7,13 +7,13 @@ import { getTaskConfig } from '@/features/workspace/workspace.config';
 import { formatDistanceToNow, isToday, isYesterday, isAfter, subDays, format } from 'date-fns';
 import { ArrowRight, CheckCircle2, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { EASE_OUT, EASE_IN, EASE_SNAP } from '@/lib/motion';
 
 interface WorkspaceRowProps {
   workspace: WorkspaceResponse;
-  index: number;
 }
 
-export function WorkspaceRow({ workspace, index }: WorkspaceRowProps) {
+export function WorkspaceRow({ workspace }: WorkspaceRowProps) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const config = getTaskConfig(workspace.annotationType);
@@ -31,17 +31,12 @@ export function WorkspaceRow({ workspace, index }: WorkspaceRowProps) {
 
   return (
     <motion.div
-      layout
-      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
-      transition={{
-        duration: 0.25,
-        delay: index * 0.03,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-      whileHover={reduceMotion ? {} : { x: 3 }}
-      whileTap={{ scale: 0.99 }}
+      layout="position"
+      initial={reduceMotion ? false : { opacity: 0, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, filter: 'blur(0px)', transition: { duration: 0.2, ease: EASE_OUT } }}
+      exit={reduceMotion ? undefined : { opacity: 0, filter: 'blur(4px)', transition: { duration: 0.12, ease: EASE_IN } }}
+      whileHover={reduceMotion ? {} : { x: 3, transition: { duration: 0.2, ease: EASE_SNAP } }}
+      whileTap={{ scale: 0.99, transition: { duration: 0.1, ease: EASE_SNAP } }}
       onClick={() => router.push(`/workspace/${workspace.id}`)}
       className="group flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-150 shadow-xs"
     >

@@ -199,18 +199,6 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
 
           {/* Right Header Navigation & Actions */}
           <div className="flex items-center gap-3">
-            {/* Quick search shortcut trigger */}
-            <button
-              onClick={() => searchInputRef.current?.focus()}
-              className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-lg hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Search workspaces</span>
-              <kbd className="font-mono text-[10px] px-1 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-500 shadow-2xs">
-                /
-              </kbd>
-            </button>
-
             <NotificationDropdown />
 
             {/* User Profile */}
@@ -318,7 +306,7 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
                     <motion.div
                       layoutId="activeFilterPill"
                       className="absolute inset-0 rounded-lg bg-white dark:bg-slate-800 shadow-2xs border border-slate-200/60 dark:border-slate-700"
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                     />
                   )}
                   <span className="relative z-10">
@@ -428,18 +416,18 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
 
         {/* Content Display: Grid vs List with AnimatePresence */}
         {viewMode === 'grid' ? (
-          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <motion.div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <AnimatePresence mode="popLayout">
-              {filteredAndSortedWorkspaces.map((workspace, index) => (
-                <WorkspaceCard key={workspace.id} workspace={workspace} index={index} />
+              {filteredAndSortedWorkspaces.map((workspace) => (
+                <WorkspaceCard key={workspace.id} workspace={workspace} />
               ))}
             </AnimatePresence>
           </motion.div>
         ) : (
           <motion.div layout className="space-y-3">
             <AnimatePresence mode="popLayout">
-              {filteredAndSortedWorkspaces.map((workspace, index) => (
-                <WorkspaceRow key={workspace.id} workspace={workspace} index={index} />
+              {filteredAndSortedWorkspaces.map((workspace) => (
+                <WorkspaceRow key={workspace.id} workspace={workspace} />
               ))}
             </AnimatePresence>
           </motion.div>

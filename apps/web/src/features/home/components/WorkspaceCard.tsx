@@ -8,13 +8,13 @@ import { formatDistanceToNow, isToday, isYesterday, isAfter, subDays, format } f
 import { ArrowRight, Clock, CheckCircle2, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { EASE_OUT, EASE_IN, EASE_SNAP } from '@/lib/motion';
 
 interface WorkspaceCardProps {
   workspace: WorkspaceResponse;
-  index: number;
 }
 
-export function WorkspaceCard({ workspace, index }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace }: WorkspaceCardProps) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
   const config = getTaskConfig(workspace.annotationType);
@@ -38,17 +38,11 @@ export function WorkspaceCard({ workspace, index }: WorkspaceCardProps) {
 
   return (
     <motion.div
-      layout
-      initial={reduceMotion ? false : { opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-      transition={{
-        duration: 0.35,
-        delay: index * 0.05,
-        ease: [0.16, 1, 0.3, 1],
-      }}
-      whileHover={reduceMotion ? {} : { y: -4 }}
-      whileTap={{ scale: 0.98 }}
+      initial={reduceMotion ? false : { opacity: 0, filter: 'blur(4px)' }}
+      animate={{ opacity: 1, filter: 'blur(0px)', transition: { duration: 0.2, ease: EASE_OUT } }}
+      exit={reduceMotion ? undefined : { opacity: 0, filter: 'blur(4px)', transition: { duration: 0.12, ease: EASE_IN } }}
+      whileHover={reduceMotion ? {} : { y: -4, transition: { duration: 0.2, ease: EASE_SNAP } }}
+      whileTap={{ scale: 0.98, transition: { duration: 0.1, ease: EASE_SNAP } }}
       onClick={() => router.push(`/workspace/${workspace.id}`)}
       className="group relative flex flex-col justify-between rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-6 cursor-pointer shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_28px_-6px_rgba(0,0,0,0.08)] hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200"
     >

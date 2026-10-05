@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { WorkspaceResponse } from '@/features/workspace/workspace.contracts';
-import { Layers, FileCheck, Award, Users2 } from 'lucide-react';
+import { Layers, FileCheck } from 'lucide-react';
 
 interface ExecutiveMetricsProps {
   workspaces: WorkspaceResponse[];
@@ -37,7 +37,7 @@ export function ExecutiveMetrics({ workspaces }: ExecutiveMetricsProps) {
       icon: Layers,
       color: 'text-blue-600 dark:text-blue-400',
       bg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200/60 dark:border-blue-900/40',
-      badge: '4 Tasks Live',
+      badge: `${stats.totalWorkspaces} Task${stats.totalWorkspaces === 1 ? '' : 's'} Live`,
     },
     {
       title: 'Pipeline Throughput',
@@ -49,29 +49,10 @@ export function ExecutiveMetrics({ workspaces }: ExecutiveMetricsProps) {
       badge: `${stats.overallPercentage}% Complete`,
       progressBar: stats.overallPercentage,
     },
-    {
-      title: 'Agreement Rate (IAA)',
-      value: '96.4%',
-      subtitle: "Cohen's κ = 0.91 (High consistency)",
-      icon: Award,
-      color: 'text-indigo-600 dark:text-indigo-400',
-      bg: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200/60 dark:border-indigo-900/40',
-      badge: '+1.8% this cycle',
-      badgePositive: true,
-    },
-    {
-      title: 'Research Team',
-      value: '3 Members',
-      subtitle: '12 document revisions today',
-      icon: Users2,
-      color: 'text-purple-600 dark:text-purple-400',
-      bg: 'bg-purple-50 dark:bg-purple-950/40 border-purple-200/60 dark:border-purple-900/40',
-      badge: 'Active Now',
-    },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
       {cards.map((card, idx) => {
         const Icon = card.icon;
         return (
@@ -92,11 +73,7 @@ export function ExecutiveMetrics({ workspaces }: ExecutiveMetricsProps) {
                 <Icon className={`w-4.5 h-4.5 ${card.color}`} />
               </div>
               <span
-                className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
-                  card.badgePositive
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
-                }`}
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-700"
               >
                 {card.badge}
               </span>
