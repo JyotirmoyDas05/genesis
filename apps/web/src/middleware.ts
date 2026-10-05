@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { SERVER_API_BASE_URL } from '@/config/env';
+import { IS_MOCK_MODE, SERVER_API_BASE_URL } from '@/config/env';
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -22,6 +22,17 @@ const matches = (path: string, prefixes: string[]) =>
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // In Mock Mode, bypass auth redirects and go directly to /home
+  if (IS_MOCK_MODE) {
+    if (matches(pathname, GUEST_ONLY_PREFIXES)) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/home';
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
   const hasAccess = request.cookies.has(ACCESS_COOKIE);
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   const isProtected = matches(pathname, PROTECTED_PREFIXES);

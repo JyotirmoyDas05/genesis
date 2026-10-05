@@ -27,3 +27,9 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost
  * internal hostname never leaks to the browser.
  */
 export const SERVER_API_BASE_URL = process.env.INTERNAL_API_URL || API_BASE_URL;
+
+/**
+ * Mock mode flag. When true, bypasses authentication and serves mock data
+ * without requiring the Java or Node backend services to be running.
+ */
+export const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';

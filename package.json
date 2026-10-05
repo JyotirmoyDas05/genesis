@@ -2,8 +2,13 @@
   "name": "genesis",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "pnpm --filter @genesis/web dev",
+    "dev:mock": "pnpm --filter @genesis/web dev:mock",
     "dev:api": "pnpm --filter @genesis/api dev",
     "dev:all": "pnpm --filter \"@genesis/*\" dev",
     "build": "pnpm --filter \"@genesis/*\" build",

@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Repo Location
+
+The monorepo lives at `D:/temp_prs/genesis` (GitHub: `JyotirmoyDas05/genesis`). The old `genesis-frontend` folder and the standalone Java `genesis` repo are gone, so never reference them. Layout: `apps/web` (Next.js frontend), `apps/api` (TypeScript backend rewrite, in progress), `packages/contracts` (shared Zod schemas), `legacy/genesis-java` (Spring Boot reference you port from).
+
 ## Project Overview
 
 Genesis is a modern NLP annotation tool built with Next.js 15, React 19, and TypeScript. The application enables users to create workspaces, manage annotation projects, collaborate with teams, and annotate documents for various NLP tasks like Named Entity Recognition, Sentiment Analysis, Text Classification, and Relation Extraction.

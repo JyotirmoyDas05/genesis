@@ -12,6 +12,7 @@ import {
   markNotificationAsReadAction,
 } from '@/features/notifications/notifications.actions';
 import { useAuth } from '@/features/auth/auth.provider';
+import { IS_MOCK_MODE } from '@/config/env';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -53,7 +54,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     // WebSocket Connection
     useEffect(() => {
-        if (!isAuthenticated || !user) {
+        if (IS_MOCK_MODE || !isAuthenticated || !user) {
             if (stompClient) {
                 stompClient.deactivate();
                 setStompClient(null);
@@ -165,15 +166,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
 
     return (
-        <NotificationContext.Provider value={{
-            notifications,
-            unreadCount,
-            showNotification,
-            toggleNotifications,
-            markAsRead,
-            markAllAsRead,
-            deleteNotification
-        }}>
+        <NotificationContext.Provider
+            value={{
+                notifications,
+                unreadCount,
+                showNotification,
+                toggleNotifications,
+                markAsRead,
+                markAllAsRead,
+                deleteNotification,
+            }}
+        >
             {children}
         </NotificationContext.Provider>
     );
@@ -181,6 +184,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
 export function useNotifications() {
     const context = useContext(NotificationContext);
-    if (!context) throw new Error('useNotifications must be used within NotificationProvider');
+    if (context === undefined) {
+        throw new Error('useNotifications must be used within a NotificationProvider');
+    }
     return context;
 }

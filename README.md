@@ -28,6 +28,8 @@ genesis/
 
 ## Quick Start
 
+For a detailed, step-by-step handholding guide, see [**`SETUP.md`**](file:///D:/temp_prs/genesis/SETUP.md).
+
 ### Prerequisites
 - Node.js >= 20.x
 - pnpm >= 9.x
@@ -37,14 +39,20 @@ genesis/
 pnpm install
 ```
 
-### Running the Frontend
+### Running the Frontend in Mock Mode (No Backend Needed)
+Bypasses authentication and loads realistic mock workspaces, documents, and notifications:
+```bash
+pnpm dev:mock
+```
+Then open `http://localhost:3000` to land directly on the dashboard.
+
+### Running with Real Backend Integration
+Runs the standard app requiring a running backend on `http://localhost:8080`:
 ```bash
 pnpm dev
 # Or specifically:
 pnpm --filter @genesis/web dev
 ```
-
-The web application runs on `http://localhost:3000`.
 
 ### Running the API
 ```bash
@@ -55,6 +63,6 @@ pnpm --filter @genesis/api dev
 
 ### Type Checking & Building
 ```bash
-pnpm typecheck
+pnpm --filter @genesis/web exec tsc --noEmit
 pnpm build
 ```
