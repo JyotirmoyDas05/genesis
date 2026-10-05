@@ -7,7 +7,7 @@
  * server, the Edge, and the client alike.
  */
 
-if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production') {
+if (!process.env.NEXT_PUBLIC_API_URL && process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_MOCK_MODE !== 'true') {
     throw new Error('NEXT_PUBLIC_API_URL must be set in production builds');
 }
 

@@ -1,18 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,68 +16,94 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useRequireAuth } from '@/features/auth/auth.provider';
-import { WorkspaceResponse, AnnotationType, CreateWorkspaceRequest } from '@/features/workspace/workspace.contracts';
+import { WorkspaceResponse, CreateWorkspaceRequest } from '@/features/workspace/workspace.contracts';
 import { createWorkspaceAction } from '@/features/workspace/workspace.actions';
-import { LogOut, Settings, User } from 'lucide-react';
-import { formatDistanceToNow, isToday, isYesterday, subDays, isAfter, format } from 'date-fns';
+import {
+  Search,
+  Plus,
+  LogOut,
+  Settings,
+  User,
+  LayoutGrid,
+  List,
+  X,
+  ArrowUpDown,
+} from 'lucide-react';
 import { NotificationDropdown } from '@/features/notifications/components/NotificationDropdown';
+import { ExecutiveMetrics } from './ExecutiveMetrics';
+import { WorkspaceCard } from './WorkspaceCard';
+import { WorkspaceRow } from './WorkspaceRow';
+import { CreateWorkspaceDialog } from './CreateWorkspaceDialog';
 
 interface HomeClientProps {
   initialWorkspaces: WorkspaceResponse[];
 }
 
+type ViewMode = 'grid' | 'list';
+type SortOption = 'recent' | 'progress_desc' | 'progress_asc' | 'alphabetical';
+type FilterTab = 'ALL' | 'NER' | 'COREF' | 'POS' | 'WSD';
+
 export function HomeClient({ initialWorkspaces }: HomeClientProps) {
   const router = useRouter();
   const { user, logout } = useAuth();
   useRequireAuth();
+  const reduceMotion = useReducedMotion();
+
   const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>(initialWorkspaces);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTab, setSelectedTab] = useState<FilterTab>('ALL');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [isNewWorkspaceOpen, setIsNewWorkspaceOpen] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState('');
-  const [workspaceDescription, setWorkspaceDescription] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
-  const [workspaceType, setWorkspaceType] = useState<string>('');
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const handleCreateWorkspace = async () => {
-    if (!workspaceName || !workspaceType) return;
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Keyboard shortcut listener: '/' to focus search, 'Escape' to clear
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input or textarea
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        if (e.key === 'Escape') {
+          setSearchQuery('');
+          (e.target as HTMLElement).blur();
+        }
+        return;
+      }
+
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleCreateWorkspace = async (request: CreateWorkspaceRequest) => {
     setCreateError(null);
     try {
       setIsCreating(true);
-      const request: CreateWorkspaceRequest = {
-        name: workspaceName,
-        description: workspaceDescription,
-        annotationType: workspaceType as AnnotationType,
-      };
-
       const result = await createWorkspaceAction(request);
       if (!result.ok) {
         setCreateError(result.error);
         return;
       }
-      // Optimistically prepend; the action's revalidatePath('/home') means
-      // the next navigation will see the canonical server-rendered list.
       setWorkspaces((prev) => [result.data, ...prev]);
       setIsNewWorkspaceOpen(false);
-
-      setWorkspaceName('');
-      setWorkspaceDescription('');
-      setWorkspaceType('');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create workspace';
       console.error('Failed to create workspace:', error);
       setCreateError(message);
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const closeNewWorkspaceDialog = (open: boolean) => {
-    setIsNewWorkspaceOpen(open);
-    if (!open) {
-      setCreateError(null);
     }
   };
 
@@ -104,134 +124,138 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
   };
 
   const getUserDisplayName = () => {
-    if (!user) return 'User';
+    if (!user) return 'Researcher';
     if (user.firstName) {
       return user.firstName + (user.lastName ? ' ' + user.lastName : '');
     }
-    return user.username || 'User';
+    return user.username || 'Researcher';
   };
 
-  const formatLastUpdated = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    if (isToday(date)) {
-      return formatDistanceToNow(date, { addSuffix: true });
-    }
-    if (isYesterday(date)) {
-      return 'Yesterday';
-    }
-    if (isAfter(date, subDays(now, 7))) {
-      return formatDistanceToNow(date, { addSuffix: true });
-    }
-    return format(date, 'MMM d, yyyy');
-  };
+  // Filter and Sort Pipeline
+  const filteredAndSortedWorkspaces = useMemo(() => {
+    const result = workspaces.filter((w) => {
+      const matchesSearch =
+        w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        w.annotationType.toLowerCase().includes(searchQuery.toLowerCase());
 
-  const filteredWorkspaces = workspaces.filter((workspace) =>
-    workspace.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      const matchesTab = selectedTab === 'ALL' || w.annotationType === selectedTab;
 
-  const recentWorkspaces = [...workspaces]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 4);
+      return matchesSearch && matchesTab;
+    });
 
-  const renderWorkspaceCard = (workspace: WorkspaceResponse) => (
-    <Card
-      key={workspace.id}
-      className="hover:shadow-xl hover:shadow-(--primary)/10 transition-all duration-300 cursor-pointer group border-slate-200/60 dark:border-slate-800/60 bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm hover:scale-[1.02] hover:border-(--primary)/30"
-      onClick={() => router.push(`/workspace/${workspace.id}`)}
-    >
-      <CardHeader>
-        <div className="flex items-start justify-between mb-3">
-          <div className="w-14 h-14 rounded-2xl bg-linear-to-br from-primary via-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-(--primary)/20">
-            {workspace.name.charAt(0).toUpperCase()}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <CardTitle className="text-lg font-bold">{workspace.name}</CardTitle>
-          <CardDescription className="text-sm">{workspace.annotationType}</CardDescription>
-          {workspace.description && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mt-1" title={workspace.description}>
-              {workspace.description}
-            </p>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div>
-            <div className="flex justify-between text-sm mb-2">
-              <span className="text-slate-600 dark:text-slate-400 font-medium">Progress</span>
-              <span className="font-bold text-primary dark:text-primary-light">{workspace.progressPercentage}%</span>
-            </div>
-            <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-linear-to-r from-primary to-purple-600 rounded-full transition-all duration-500 shadow-sm"
-                style={{ width: `${workspace.progressPercentage}%` }}
-              />
-            </div>
-          </div>
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'progress_desc':
+          return b.progressPercentage - a.progressPercentage;
+        case 'progress_asc':
+          return a.progressPercentage - b.progressPercentage;
+        case 'alphabetical':
+          return a.name.localeCompare(b.name);
+        case 'recent':
+        default:
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      }
+    });
 
-          <div className="flex items-center justify-between text-sm pt-1">
-            <span className="text-slate-600 dark:text-slate-400 font-medium">
-              {workspace.annotatedDocumentCount} / {workspace.documentCount} documents
-            </span>
-            <Badge variant="secondary" className="text-xs">
-              Updated {formatLastUpdated(workspace.updatedAt)}
-            </Badge>
-          </div>
-        </div>
-      </CardContent>
-    </Card >
-  );
+    return result;
+  }, [workspaces, searchQuery, selectedTab, sortBy]);
+
+  // Tab counts
+  const tabCounts = useMemo(() => {
+    const counts = { ALL: workspaces.length, NER: 0, COREF: 0, POS: 0, WSD: 0 };
+    workspaces.forEach((w) => {
+      if (w.annotationType in counts) {
+        counts[w.annotationType as keyof typeof counts]++;
+      }
+    });
+    return counts;
+  }, [workspaces]);
+
+  const filterTabs: FilterTab[] = ['ALL', 'NER', 'COREF', 'POS', 'WSD'];
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 via-indigo-50/30 to-purple-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <header className="border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Image
-              src="/genesis-logo.svg"
-              alt="Genesis Logo"
-              width={120}
-              height={55}
-              priority
-              className="h-10 w-auto"
-            />
+    <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans">
+      {/* Refined Header */}
+      <header className="border-b border-slate-200/70 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl sticky top-0 z-40 transition-colors">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          {/* Logo & Product Tag */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => router.push('/home')}>
+              <Image
+                src="/genesis-logo.svg"
+                alt="Genesis Logo"
+                width={105}
+                height={48}
+                priority
+                className="h-8 w-auto"
+              />
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-semibold tracking-wide rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                v0.2 · Research
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Right Header Navigation & Actions */}
+          <div className="flex items-center gap-3">
+            {/* Quick search shortcut trigger */}
+            <button
+              onClick={() => searchInputRef.current?.focus()}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-lg hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Search workspaces</span>
+              <kbd className="font-mono text-[10px] px-1 py-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-500 shadow-2xs">
+                /
+              </kbd>
+            </button>
+
             <NotificationDropdown />
 
+            {/* User Profile */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Avatar aria-label="User menu" className="cursor-pointer ring-2 ring-white dark:ring-slate-800 hover:shadow-lg transition-shadow">
-                  <AvatarFallback className="bg-linear-to-br from-primary to-purple-600 text-white font-bold">
-                    {getUserInitials()}
-                  </AvatarFallback>
-                </Avatar>
+                <button
+                  aria-label="User menu"
+                  className="flex items-center gap-2 p-1 pl-1.5 pr-2.5 rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors shadow-2xs"
+                >
+                  <Avatar className="w-7 h-7">
+                    <AvatarFallback className="bg-primary text-white font-bold text-xs">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs font-semibold max-w-[100px] truncate text-slate-700 dark:text-slate-300">
+                    {user?.firstName || 'Alex'}
+                  </span>
+                </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuContent align="end" className="w-56 rounded-xl border-slate-200 dark:border-slate-800 shadow-lg">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{getUserDisplayName()}</p>
-                    <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                    <p className="text-sm font-semibold leading-none">{getUserDisplayName()}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                    <span className="inline-block mt-1 text-[10px] font-semibold text-primary uppercase">
+                      {user?.organizationName || 'Genesis NLP Lab'}
+                    </span>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
+                <DropdownMenuItem className="cursor-pointer gap-2 text-xs">
+                  <User className="w-4 h-4 text-slate-500" />
+                  <span>Profile & Team</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
+                <DropdownMenuItem className="cursor-pointer gap-2 text-xs">
+                  <Settings className="w-4 h-4 text-slate-500" />
+                  <span>Workspace Preferences</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  className="cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                  className="cursor-pointer gap-2 text-xs text-red-600 dark:text-red-400 focus:text-red-600"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOut className="w-4 h-4" />
                   <span>{isLoggingOut ? 'Logging out...' : 'Log out'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -240,169 +264,265 @@ export function HomeClient({ initialWorkspaces }: HomeClientProps) {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
-        <div className="mb-10">
-          <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between mb-8">
-            <div>
-              <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-3 tracking-tight">
-                Welcome back, {user?.firstName || user?.username || 'User'}
-              </h2>
-              <p className="text-slate-600 dark:text-slate-400 text-lg">
-                Continue your annotation work or start a new workspace
-              </p>
+      {/* Main Workspace Area */}
+      <main className="max-w-7xl mx-auto px-6 py-8 flex-1 w-full">
+        {/* Hero Title & Primary CTAs */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Annotation Workspace Suite
+              </span>
             </div>
-            <div className="flex gap-3">
-              <Button size="lg" variant="outline" className="gap-2 shadow-sm hover:shadow-md">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Import Workspace
-              </Button>
-              <Dialog open={isNewWorkspaceOpen} onOpenChange={closeNewWorkspaceDialog}>
-                <DialogTrigger asChild>
-                  <Button size="lg" className="gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    New Workspace
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[525px]">
-                  <DialogHeader>
-                    <DialogTitle>Create New Workspace</DialogTitle>
-                    <DialogDescription>
-                      Set up a new annotation workspace. Choose a name, description, and annotation type.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-5 py-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="name" className="font-medium">Workspace Name</Label>
-                      <Input
-                        id="name"
-                        placeholder="e.g., Customer Feedback Analysis"
-                        value={workspaceName}
-                        onChange={(e) => setWorkspaceName(e.target.value)}
-                        className="h-11 rounded-xl"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="description" className="font-medium">Description</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="Describe the purpose of this workspace..."
-                        value={workspaceDescription}
-                        onChange={(e) => setWorkspaceDescription(e.target.value)}
-                        rows={3}
-                        className="rounded-xl"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="type" className="font-medium">Annotation Type</Label>
-                      <Select value={workspaceType} onValueChange={setWorkspaceType}>
-                        <SelectTrigger id="type" className="h-11 rounded-xl">
-                          <SelectValue placeholder="Select annotation type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="COREF">Coreference Resolution</SelectItem>
-                          <SelectItem value="NER">Named Entity Recognition</SelectItem>
-                          <SelectItem value="POS">Part-of-Speech Tagging</SelectItem>
-                          <SelectItem value="WSD">Word-Sense Disambiguation</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {createError && (
-                    <div
-                      role="alert"
-                      className="mt-2 rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300"
-                    >
-                      {createError}
-                    </div>
-                  )}
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => closeNewWorkspaceDialog(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleCreateWorkspace} disabled={!workspaceName || !workspaceType || isCreating}>
-                      {isCreating ? 'Creating...' : 'Create Workspace'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+              Welcome back, {user?.firstName || 'Alex'}
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xl">
+              Track entity labels, coreference clusters, syntax tags, and lexical senses across your research pipeline.
+            </p>
           </div>
 
-          <div className="relative max-w-2xl">
-            <svg
-              className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              onClick={() => setIsNewWorkspaceOpen(true)}
+              className="rounded-xl gap-2 font-semibold shadow-sm hover:shadow-md hover:shadow-primary/20 transition-all duration-200"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <Input
-              type="search"
-              placeholder="Search workspaces..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 h-12 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900"
-            />
+              <Plus className="w-4 h-4" />
+              <span>New Workspace</span>
+            </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="recent" className="w-full">
-          <TabsList className="mb-8">
-            <TabsTrigger value="recent">Recent Workspaces</TabsTrigger>
-            <TabsTrigger value="all">All Workspaces</TabsTrigger>
-          </TabsList>
+        {/* Executive Quick-Pulse Metrics Strip */}
+        <ExecutiveMetrics workspaces={workspaces} />
 
-          <TabsContent value="recent">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {recentWorkspaces.map(renderWorkspaceCard)}
+        {/* Control Bar: Filters, Search, View Mode */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pt-2">
+          {/* Segmented Filter Pills */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-200/50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 overflow-x-auto">
+            {filterTabs.map((tab) => {
+              const isSelected = selectedTab === tab;
+              const count = tabCounts[tab];
+
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setSelectedTab(tab)}
+                  className={`relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 ${
+                    isSelected
+                      ? 'text-slate-900 dark:text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  {isSelected && (
+                    <motion.div
+                      layoutId="activeFilterPill"
+                      className="absolute inset-0 rounded-lg bg-white dark:bg-slate-800 shadow-2xs border border-slate-200/60 dark:border-slate-700"
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">
+                    {tab === 'ALL' ? 'All Workspaces' : tab}
+                  </span>
+                  <span
+                    className={`relative z-10 text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                      isSelected
+                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white'
+                        : 'bg-slate-200/70 dark:bg-slate-800 text-slate-500'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search, Sort, and View Toggle Group */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Search Input with quick clear */}
+            <div className="relative min-w-[220px] flex-1 sm:flex-initial">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              <Input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Filter by name or tag..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-8 h-9 text-xs rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus-visible:ring-primary shadow-2xs"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            {recentWorkspaces.length === 0 && (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 bg-linear-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                  No recent workspaces
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
-                  Start working on a workspace and it will appear here
-                </p>
-              </div>
-            )}
-          </TabsContent>
+            {/* Sort Selector */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-xl gap-1.5 text-xs border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs text-slate-700 dark:text-slate-300"
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="hidden sm:inline">Sort:</span>
+                  <span className="font-semibold">
+                    {sortBy === 'recent'
+                      ? 'Recently Active'
+                      : sortBy === 'progress_desc'
+                      ? 'Highest Progress'
+                      : sortBy === 'progress_asc'
+                      ? 'Lowest Progress'
+                      : 'Alphabetical'}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                <DropdownMenuItem onClick={() => setSortBy('recent')} className="text-xs cursor-pointer">
+                  Recently Active
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('progress_desc')} className="text-xs cursor-pointer">
+                  Highest Progress
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('progress_asc')} className="text-xs cursor-pointer">
+                  Lowest Progress
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('alphabetical')} className="text-xs cursor-pointer">
+                  Alphabetical
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <TabsContent value="all">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredWorkspaces.map(renderWorkspaceCard)}
+            {/* View Mode Toggle (Grid vs List) */}
+            <div className="flex items-center p-0.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+              <button
+                onClick={() => setViewMode('grid')}
+                aria-label="Grid view"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  viewMode === 'grid'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-primary'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                aria-label="List view"
+                className={`p-1.5 rounded-lg transition-colors ${
+                  viewMode === 'list'
+                    ? 'bg-slate-100 dark:bg-slate-800 text-primary'
+                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
             </div>
+          </div>
+        </div>
 
-            {filteredWorkspaces.length === 0 && (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 bg-linear-to-br from-indigo-100 to-purple-100 dark:from-slate-800 dark:to-slate-700 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-md">
-                  <svg className="w-10 h-10 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
-                  No workspaces found
-                </h3>
-                <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
-                  Try adjusting your search or create a new workspace to get started
-                </p>
-                <Button size="lg" onClick={() => setIsNewWorkspaceOpen(true)}>Create New Workspace</Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        {/* Content Display: Grid vs List with AnimatePresence */}
+        {viewMode === 'grid' ? (
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            <AnimatePresence mode="popLayout">
+              {filteredAndSortedWorkspaces.map((workspace, index) => (
+                <WorkspaceCard key={workspace.id} workspace={workspace} index={index} />
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <motion.div layout className="space-y-3">
+            <AnimatePresence mode="popLayout">
+              {filteredAndSortedWorkspaces.map((workspace, index) => (
+                <WorkspaceRow key={workspace.id} workspace={workspace} index={index} />
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+        {/* Clean, Deslopped Empty State */}
+        {filteredAndSortedWorkspaces.length === 0 && (
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="flex flex-col items-center justify-center text-center py-20 px-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-white/40 dark:bg-slate-900/40"
+          >
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-4">
+              <Search className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              No matching workspaces found
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
+              {searchQuery
+                ? `No workspaces matched "${searchQuery}". Try searching by another keyword or reset the search.`
+                : `No workspaces found under the "${selectedTab}" annotation task.`}
+            </p>
+            <div className="flex gap-2.5 mt-5">
+              {searchQuery && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchQuery('')}
+                  className="rounded-xl text-xs"
+                >
+                  Clear search
+                </Button>
+              )}
+              {selectedTab !== 'ALL' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTab('ALL')}
+                  className="rounded-xl text-xs"
+                >
+                  Show all tasks
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => setIsNewWorkspaceOpen(true)}
+                className="rounded-xl text-xs gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create workspace
+              </Button>
+            </div>
+          </motion.div>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-200/60 dark:border-slate-800/80 py-6 px-6 mt-12 bg-white/50 dark:bg-slate-900/50">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">Genesis</span>
+            <span>· Enterprise NLP Annotation & Curation Suite</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+              All systems operational
+            </span>
+            <span>·</span>
+            <span>Mock Mode Active</span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Interactive New Workspace Dialog */}
+      <CreateWorkspaceDialog
+        open={isNewWorkspaceOpen}
+        onOpenChange={setIsNewWorkspaceOpen}
+        onCreate={handleCreateWorkspace}
+        isCreating={isCreating}
+        createError={createError}
+      />
     </div>
   );
 }

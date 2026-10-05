@@ -43,3 +43,4 @@ yarn-error.log*
 .vercel
 .claude/
 CLAUDE.md
+.agents/
