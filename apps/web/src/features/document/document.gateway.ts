@@ -4,7 +4,10 @@ import { ApiResponse } from '@/server/contracts/common';
 import { serverFetch } from '@/server/http';
 import { IS_MOCK_MODE } from '@/config/env';
 import { DocumentResponse } from './document.contracts';
-import { getMockDocuments } from '@/server/mock-data';
+import {
+  addMockDocumentWithContent,
+  getMockDocuments,
+} from '@/server/mock-data';
 
 export async function listDocuments(workspaceId: string): Promise<DocumentResponse[]> {
   if (IS_MOCK_MODE) {
@@ -33,7 +36,7 @@ export async function updateDocumentStatus(
       name: 'sample_document.txt',
       orderIndex: 0,
       status,
-      workspaceId: 'ws_biomed_ner',
+      workspaceId: 'ws_fin_coref',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -50,17 +53,18 @@ export async function uploadDocument(
   file: File,
 ): Promise<DocumentResponse> {
   if (IS_MOCK_MODE) {
-    return {
-      id: `doc_${Date.now()}`,
-      name: file.name,
-      orderIndex: 99,
-      status: 'NEW',
+    let content = '';
+    try {
+      content = await file.text();
+    } catch {
+      content = '';
+    }
+    return addMockDocumentWithContent(
       workspaceId,
-      fileSize: file.size,
-      progress: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+      file.name,
+      content || `Uploaded document ${file.name}. Contains text tokenized for workspace annotations.`,
+      file.size,
+    );
   }
   const formData = new FormData();
   formData.append('file', file);

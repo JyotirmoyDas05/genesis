@@ -2,6 +2,17 @@ import 'server-only';
 
 import { ApiResponse, CursorPage } from '@/server/contracts/common';
 import { serverFetch } from '@/server/http';
+import { IS_MOCK_MODE } from '@/config/env';
+import {
+  assignMockMentionToCluster,
+  createMockCluster,
+  createMockMention,
+  deleteMockCluster,
+  deleteMockMention,
+  getMockClusters,
+  getMockMentions,
+  mergeMockClusters,
+} from '@/server/mock-data';
 import {
   ClusterDto,
   CreateClusterRequest,
@@ -37,6 +48,9 @@ function asCursorPage<T>(data: CursorPage<T> | T[] | null | undefined): CursorPa
 export async function getMentionsByWorkspace(
   workspaceId: string,
 ): Promise<MentionDto[]> {
+  if (IS_MOCK_MODE) {
+    return getMockMentions(workspaceId);
+  }
   const all: MentionDto[] = [];
   let cursor: string | null = null;
   do {
@@ -57,6 +71,9 @@ export async function createMention(
   workspaceId: string,
   data: CreateMentionRequest,
 ): Promise<MentionDto> {
+  if (IS_MOCK_MODE) {
+    return createMockMention(workspaceId, data);
+  }
   const res = await serverFetch<ApiResponse<MentionDto>>(
     `/api/workspaces/${workspaceId}/mentions`,
     { method: 'POST', body: JSON.stringify(data) },
@@ -68,6 +85,9 @@ export async function assignToCluster(
   mentionId: string,
   clusterId: string,
 ): Promise<MentionDto> {
+  if (IS_MOCK_MODE) {
+    return assignMockMentionToCluster(mentionId, clusterId);
+  }
   const res = await serverFetch<ApiResponse<MentionDto>>(
     `/api/mentions/${mentionId}/cluster/${clusterId}`,
     { method: 'PUT' },
@@ -76,6 +96,10 @@ export async function assignToCluster(
 }
 
 export async function deleteMention(mentionId: string): Promise<void> {
+  if (IS_MOCK_MODE) {
+    deleteMockMention(mentionId);
+    return;
+  }
   await serverFetch<void>(`/api/mentions/${mentionId}`, { method: 'DELETE' });
 }
 
@@ -88,6 +112,9 @@ export async function deleteMention(mentionId: string): Promise<void> {
  * on.
  */
 export async function getClusters(workspaceId: string): Promise<ClusterDto[]> {
+  if (IS_MOCK_MODE) {
+    return getMockClusters(workspaceId);
+  }
   const all: ClusterDto[] = [];
   let cursor: string | null = null;
   do {
@@ -108,6 +135,9 @@ export async function createCluster(
   workspaceId: string,
   request?: CreateClusterRequest,
 ): Promise<ClusterDto> {
+  if (IS_MOCK_MODE) {
+    return createMockCluster(workspaceId, request);
+  }
   const res = await serverFetch<ApiResponse<ClusterDto>>(
     `/api/workspaces/${workspaceId}/clusters`,
     {
@@ -119,6 +149,10 @@ export async function createCluster(
 }
 
 export async function deleteCluster(clusterId: string): Promise<void> {
+  if (IS_MOCK_MODE) {
+    deleteMockCluster(clusterId);
+    return;
+  }
   await serverFetch<void>(`/api/clusters/${clusterId}`, { method: 'DELETE' });
 }
 
@@ -127,6 +161,9 @@ export async function mergeClusters(
   sourceClusterIds: string[],
   targetClusterId: string,
 ): Promise<ClusterDto> {
+  if (IS_MOCK_MODE) {
+    return mergeMockClusters(workspaceId, sourceClusterIds, targetClusterId);
+  }
   const res = await serverFetch<ApiResponse<ClusterDto>>(
     `/api/workspaces/${workspaceId}/clusters/merge`,
     {
