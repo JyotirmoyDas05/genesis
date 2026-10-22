@@ -12,6 +12,7 @@ import {
   exportConsensus,
   exportPerAnnotator,
   listSenses,
+  importSenses,
   searchSenses,
   removeAnnotation,
   removeSense,
@@ -61,6 +62,45 @@ wsdRoutes.get("/workspaces/:workspaceId/wsd/senses", authMiddleware, async (c) =
     200,
   );
 });
+
+
+wsdRoutes.post("/workspaces/:workspaceId/wsd/import", authMiddleware, async (c) => {
+  const workspaceId = needParam(c, "workspaceId");
+  const userId = c.get("userId");
+  const modeParam = c.req.query("mode") as "skip" | "overwrite" | undefined;
+  const contentType = c.req.header("content-type") || "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    const mode = (body["mode"] as "skip" | "overwrite") || modeParam || "skip";
+    const single = Array.isArray(file) ? file[0] : file;
+    if (!(single instanceof File)) {
+      throw new BadRequestException("Missing file field in multipart upload");
+    }
+    const text = await single.text();
+    const result = await importSenses(workspaceId, userId, text, {
+      filename: single.name,
+      mode,
+    });
+    return c.json(success(result), 200);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  if (!body) {
+    throw new BadRequestException("Request body must be multipart/form-data or JSON");
+  }
+
+  const entries = Array.isArray(body) ? body : Array.isArray(body.entries) ? body.entries : null;
+  if (!entries) {
+    throw new BadRequestException("JSON body must contain an array of entries or { entries: [...] }");
+  }
+
+  const mode = (body.mode as "skip" | "overwrite") || modeParam || "skip";
+  const result = await importSenses(workspaceId, userId, entries, { mode });
+  return c.json(success(result), 200);
+});
+
 
 wsdRoutes.post("/workspaces/:workspaceId/wsd/senses", authMiddleware, async (c) => {
   const body = await c.req.json().catch(() => ({}));

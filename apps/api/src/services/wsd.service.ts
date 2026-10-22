@@ -1,3 +1,4 @@
+import { parseSenseImportContent, type ImportSensesResult, type RawSenseInput } from "./wsd-importer.service.js";
 import {
   BadRequestException,
   ConflictException,
@@ -20,6 +21,7 @@ import {
   listWsdByWorkspace,
   listWsdSenses,
   searchWsdSenses,
+  bulkInsertWsdSenses,
   saveWsdAnnotation,
   saveWsdSense,
   updateWsdSense,
@@ -107,6 +109,22 @@ export async function searchSenses(
     limit: options.limit,
     totalPages: Math.ceil(total / options.limit) || 1,
   };
+}
+
+
+
+export async function importSenses(
+  workspaceId: string,
+  userId: string,
+  rawContentOrEntries: string | RawSenseInput[],
+  options: { filename?: string; mode?: "skip" | "overwrite" } = {},
+): Promise<ImportSensesResult> {
+  await requireAdmin(workspaceId, userId);
+  const entries: RawSenseInput[] = typeof rawContentOrEntries === "string"
+    ? parseSenseImportContent(rawContentOrEntries, options.filename)
+    : rawContentOrEntries;
+
+  return bulkInsertWsdSenses(workspaceId, entries, { mode: options.mode });
 }
 
 

@@ -4,6 +4,7 @@ import { ApiResponse } from '@/server/contracts/common';
 import { serverFetch } from '@/server/http';
 import {
   CreateWsdSenseRequest,
+  ImportSensesResult,
   PaginatedSenses,
   SenseSearchParams,
   WsdAnnotation,
@@ -32,6 +33,17 @@ export async function searchSenses(
   if (params.limit !== undefined) q.set('limit', String(params.limit));
   const res = await serverFetch<ApiResponse<PaginatedSenses>>(
     `/api/workspaces/${workspaceId}/wsd/senses?${q.toString()}`,
+  );
+  return res.data;
+}
+
+export async function importSenses(
+  workspaceId: string,
+  formData: FormData,
+): Promise<ImportSensesResult> {
+  const res = await serverFetch<ApiResponse<ImportSensesResult>>(
+    `/api/workspaces/${workspaceId}/wsd/import`,
+    { method: 'POST', body: formData },
   );
   return res.data;
 }

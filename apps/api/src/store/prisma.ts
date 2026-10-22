@@ -1345,6 +1345,106 @@ export async function searchWsdSenses(
 }
 
 
+
+export interface RawSenseInput {
+  word: string;
+  senseLabel?: string | null;
+  description?: string | null;
+  examples?: string | null;
+}
+
+export async function bulkInsertWsdSenses(
+  workspaceId: string,
+  entries: RawSenseInput[],
+  options: { mode?: "skip" | "overwrite" } = {},
+): Promise<{ totalProcessed: number; inserted: number; skipped: number; updated: number }> {
+  const existing = await prisma.wsd_sense.findMany({
+    where: { workspace_id: workspaceId },
+    select: { id: true, word: true, sense_label: true },
+  });
+  const existingMap = new Map<string, string>();
+  for (const s of existing) {
+    const key = s.word.trim().toLowerCase() + ":::" + s.sense_label.trim().toLowerCase();
+    existingMap.set(key, s.id);
+  }
+
+  const timestamp = now();
+  const toInsert: Prisma.wsd_senseCreateManyInput[] = [];
+  let skipped = 0;
+  let updated = 0;
+  const seenInBatch = new Set<string>();
+
+  for (let i = 0; i < entries.length; i++) {
+    const item = entries[i];
+    const word = item.word?.trim();
+    if (!word) {
+      skipped++;
+      continue;
+    }
+
+    const senseLabel = item.senseLabel?.trim() || (word + "-sense-" + (i + 1));
+    const key = word.toLowerCase() + ":::" + senseLabel.toLowerCase();
+
+    let fullDescription = item.description?.trim() || null;
+    if (item.examples?.trim()) {
+      fullDescription = fullDescription
+        ? fullDescription + "\nExamples: " + item.examples.trim()
+        : "Examples: " + item.examples.trim();
+    }
+
+    if (existingMap.has(key)) {
+      if (options.mode === "overwrite") {
+        const id = existingMap.get(key)!;
+        await prisma.wsd_sense.update({
+          where: { id },
+          data: {
+            description: fullDescription,
+            updated_at: timestamp,
+            updated_by: AUDIT,
+          },
+        });
+        updated++;
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+
+    if (seenInBatch.has(key)) {
+      skipped++;
+      continue;
+    }
+
+    seenInBatch.add(key);
+    toInsert.push({
+      id: randomUUID(),
+      workspace_id: workspaceId,
+      word,
+      sense_label: senseLabel,
+      description: fullDescription,
+      created_at: timestamp,
+      created_by: AUDIT,
+      updated_at: timestamp,
+      updated_by: AUDIT,
+      version: 0n,
+    });
+  }
+
+  const CHUNK_SIZE = 1000;
+  for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+    const chunk = toInsert.slice(i, i + CHUNK_SIZE);
+    await prisma.wsd_sense.createMany({ data: chunk });
+  }
+
+  return {
+    totalProcessed: entries.length,
+    inserted: toInsert.length,
+    skipped,
+    updated,
+  };
+}
+
+
 export async function listWsdSenses(
   workspaceId: string,
   word?: string,

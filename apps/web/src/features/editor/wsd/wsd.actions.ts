@@ -3,6 +3,7 @@
 import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   CreateWsdSenseRequest,
+  ImportSensesResult,
   PaginatedSenses,
   SenseSearchParams,
   WsdAnnotation,
@@ -14,6 +15,7 @@ import {
   deleteSense,
   getAnnotationsForDocument,
   getAnnotationsForToken,
+  importSenses,
   listSenses,
   searchSenses,
   updateSense,
@@ -78,6 +80,18 @@ export async function searchSensesAction(
     return { ok: true, data };
   } catch (err) {
     return toActionError(err, 'Failed to search senses.');
+  }
+}
+
+export async function importSensesAction(
+  workspaceId: string,
+  formData: FormData,
+): Promise<ActionResult<ImportSensesResult>> {
+  try {
+    const data = await importSenses(workspaceId, formData);
+    return { ok: true, data };
+  } catch (err) {
+    return toActionError(err, 'Failed to import senses. Workspace admin role is required.');
   }
 }
 

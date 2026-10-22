@@ -12,6 +12,7 @@ import {
   Edit2,
   Trash2,
   Check,
+  UploadCloud,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
   searchSensesAction,
   updateSenseAction,
 } from '@/features/editor/wsd/wsd.actions';
+import { WsdImportModal } from './WsdImportModal';
 
 interface WsdSenseInventoryProps {
   workspaceId: string;
@@ -37,7 +39,7 @@ const PAGE_SIZE = 25;
 /**
  * Left-pane sense inventory for the WSD editor:
  * Server-side searched and paginated to smoothly handle 50,000+ senses (e.g. Hemkosh scale).
- * Admins can add / edit / delete senses inline.
+ * Admins can add / edit / delete senses inline, or bulk import via JSONL/CSV.
  */
 export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInventoryProps) {
   const [senses, setSenses] = useState<WsdSense[]>([]);
@@ -51,7 +53,8 @@ export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInve
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // Add sense form state
+  // Modal & form states
+  const [importOpen, setImportOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newWord, setNewWord] = useState('');
   const [newLabel, setNewLabel] = useState('');
@@ -122,7 +125,6 @@ export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInve
     setNewLabel('');
     setNewDescription('');
     setAdding(false);
-    // Refresh page 1 to show the new sense
     fetchSenses(1, debouncedQuery);
     notifyChanged();
   };
@@ -189,24 +191,36 @@ export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInve
               Sense Inventory
             </h2>
           </div>
-          <Button
-            size="sm"
-            variant={adding ? 'secondary' : 'default'}
-            className="h-7 px-2.5 text-xs font-medium gap-1"
-            onClick={() => {
-              setAdding(v => !v);
-              setError(null);
-            }}
-          >
-            {adding ? (
-              <>Close</>
-            ) : (
-              <>
-                <Plus className="w-3.5 h-3.5" />
-                Add
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs font-medium gap-1 text-slate-700 dark:text-slate-300"
+              onClick={() => setImportOpen(true)}
+              title="Bulk import senses (JSONL/CSV/TSV)"
+            >
+              <UploadCloud className="w-3.5 h-3.5 text-slate-500" />
+              Import
+            </Button>
+            <Button
+              size="sm"
+              variant={adding ? 'secondary' : 'default'}
+              className="h-7 px-2.5 text-xs font-medium gap-1"
+              onClick={() => {
+                setAdding(v => !v);
+                setError(null);
+              }}
+            >
+              {adding ? (
+                <>Close</>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  Add
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Live Search Bar */}
@@ -479,6 +493,17 @@ export function WsdSenseInventory({ workspaceId, onSensesChanged }: WsdSenseInve
           </Button>
         </div>
       )}
+
+      {/* Bulk Importer Modal */}
+      <WsdImportModal
+        workspaceId={workspaceId}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => {
+          fetchSenses(1, debouncedQuery);
+          notifyChanged();
+        }}
+      />
     </div>
   );
 }

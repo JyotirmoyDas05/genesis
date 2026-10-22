@@ -37,3 +37,10 @@ export interface SenseSearchParams {
     page?: number;
     limit?: number;
 }
+
+export interface ImportSensesResult {
+    totalProcessed: number;
+    inserted: number;
+    skipped: number;
+    updated: number;
+}
