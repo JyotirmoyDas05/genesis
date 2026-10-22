@@ -22,3 +22,18 @@ export interface WsdAnnotation {
     workspaceId: string;
     timestamp: string;
 }
+
+export interface PaginatedSenses {
+    items: WsdSense[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+}
+
+export interface SenseSearchParams {
+    word?: string;
+    query?: string;
+    page?: number;
+    limit?: number;
+}

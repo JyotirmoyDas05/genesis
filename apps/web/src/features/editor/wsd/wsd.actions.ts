@@ -3,6 +3,8 @@
 import { type ActionResult, toActionError } from '@/server/contracts/common';
 import type {
   CreateWsdSenseRequest,
+  PaginatedSenses,
+  SenseSearchParams,
   WsdAnnotation,
   WsdSense,
 } from './wsd.contracts';
@@ -13,6 +15,7 @@ import {
   getAnnotationsForDocument,
   getAnnotationsForToken,
   listSenses,
+  searchSenses,
   updateSense,
   upsertAnnotation,
 } from './wsd.gateway';
@@ -22,7 +25,8 @@ export async function createSenseAction(
   request: CreateWsdSenseRequest,
 ): Promise<ActionResult<WsdSense>> {
   try {
-    const sense = await createSense(workspaceId, request);    return { ok: true, data: sense };
+    const sense = await createSense(workspaceId, request);
+    return { ok: true, data: sense };
   } catch (err) {
     return toActionError(err, 'Failed to create sense. Admin role is required.');
   }
@@ -34,7 +38,8 @@ export async function updateSenseAction(
   request: CreateWsdSenseRequest,
 ): Promise<ActionResult<WsdSense>> {
   try {
-    const sense = await updateSense(workspaceId, senseId, request);    return { ok: true, data: sense };
+    const sense = await updateSense(workspaceId, senseId, request);
+    return { ok: true, data: sense };
   } catch (err) {
     return toActionError(err, 'Failed to update sense.');
   }
@@ -45,7 +50,8 @@ export async function deleteSenseAction(
   senseId: string,
 ): Promise<ActionResult<void>> {
   try {
-    await deleteSense(workspaceId, senseId);    return { ok: true, data: undefined };
+    await deleteSense(workspaceId, senseId);
+    return { ok: true, data: undefined };
   } catch (err) {
     return toActionError(err, 'Failed to delete sense.');
   }
@@ -60,6 +66,18 @@ export async function listSensesAction(
     return { ok: true, data };
   } catch (err) {
     return toActionError(err, 'Failed to load senses.');
+  }
+}
+
+export async function searchSensesAction(
+  workspaceId: string,
+  params: SenseSearchParams,
+): Promise<ActionResult<PaginatedSenses>> {
+  try {
+    const data = await searchSenses(workspaceId, params);
+    return { ok: true, data };
+  } catch (err) {
+    return toActionError(err, 'Failed to search senses.');
   }
 }
 

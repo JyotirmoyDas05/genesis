@@ -4,6 +4,8 @@ import { ApiResponse } from '@/server/contracts/common';
 import { serverFetch } from '@/server/http';
 import {
   CreateWsdSenseRequest,
+  PaginatedSenses,
+  SenseSearchParams,
   WsdAnnotation,
   WsdSense,
 } from './wsd.contracts';
@@ -15,6 +17,21 @@ export async function listSenses(
   const qs = word ? `?word=${encodeURIComponent(word)}` : '';
   const res = await serverFetch<ApiResponse<WsdSense[]>>(
     `/api/workspaces/${workspaceId}/wsd/senses${qs}`,
+  );
+  return res.data;
+}
+
+export async function searchSenses(
+  workspaceId: string,
+  params: SenseSearchParams,
+): Promise<PaginatedSenses> {
+  const q = new URLSearchParams();
+  if (params.word) q.set('word', params.word);
+  if (params.query) q.set('query', params.query);
+  if (params.page !== undefined) q.set('page', String(params.page));
+  if (params.limit !== undefined) q.set('limit', String(params.limit));
+  const res = await serverFetch<ApiResponse<PaginatedSenses>>(
+    `/api/workspaces/${workspaceId}/wsd/senses?${q.toString()}`,
   );
   return res.data;
 }

@@ -12,6 +12,7 @@ import {
   exportConsensus,
   exportPerAnnotator,
   listSenses,
+  searchSenses,
   removeAnnotation,
   removeSense,
   updateSense,
@@ -35,6 +36,26 @@ export const wsdRoutes = new Hono();
 
 wsdRoutes.get("/workspaces/:workspaceId/wsd/senses", authMiddleware, async (c) => {
   const word = c.req.query("word") ?? undefined;
+  const query = c.req.query("query") ?? c.req.query("search") ?? undefined;
+  const pageParam = c.req.query("page");
+  const limitParam = c.req.query("limit");
+
+  if (pageParam !== undefined || limitParam !== undefined || query !== undefined) {
+    const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(limitParam || "50", 10) || 50), 200);
+    return c.json(
+      success(
+        await searchSenses(needParam(c, "workspaceId"), c.get("userId"), {
+          word,
+          query,
+          page,
+          limit,
+        }),
+      ),
+      200,
+    );
+  }
+
   return c.json(
     success(await listSenses(needParam(c, "workspaceId"), c.get("userId"), word)),
     200,

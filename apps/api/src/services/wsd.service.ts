@@ -19,6 +19,7 @@ import {
   listWsdAnnotationsForToken,
   listWsdByWorkspace,
   listWsdSenses,
+  searchWsdSenses,
   saveWsdAnnotation,
   saveWsdSense,
   updateWsdSense,
@@ -69,6 +70,45 @@ export async function listSenses(
   await requireMember(workspaceId, userId);
   return (await listWsdSenses(workspaceId, word)).map(toSenseDto);
 }
+
+
+export interface PaginatedSensesDto {
+  items: WsdSenseDto[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function searchSenses(
+  workspaceId: string,
+  userId: string,
+  options: {
+    word?: string;
+    query?: string;
+    page: number;
+    limit: number;
+  },
+): Promise<PaginatedSensesDto> {
+  await requireMember(workspaceId, userId);
+  const skip = (options.page - 1) * options.limit;
+  const take = options.limit;
+  const { items, total } = await searchWsdSenses({
+    workspaceId,
+    word: options.word,
+    query: options.query,
+    skip,
+    take,
+  });
+  return {
+    items: items.map(toSenseDto),
+    total,
+    page: options.page,
+    limit: options.limit,
+    totalPages: Math.ceil(total / options.limit) || 1,
+  };
+}
+
 
 export async function createSense(
   workspaceId: string,

@@ -1302,6 +1302,49 @@ export async function findWsdSense(id: string): Promise<WsdSenseEntity | undefin
   return row ? mapWsdSense(row) : undefined;
 }
 
+
+export interface SearchWsdSensesFilter {
+  workspaceId: string;
+  word?: string;
+  query?: string;
+  skip?: number;
+  take?: number;
+}
+
+export async function searchWsdSenses(
+  filter: SearchWsdSensesFilter,
+): Promise<{ items: WsdSenseEntity[]; total: number }> {
+  const where: Prisma.wsd_senseWhereInput = {
+    workspace_id: filter.workspaceId,
+    ...(filter.word ? { word: { equals: filter.word, mode: "insensitive" } } : {}),
+    ...(filter.query
+      ? {
+          OR: [
+            { word: { contains: filter.query, mode: "insensitive" } },
+            { sense_label: { contains: filter.query, mode: "insensitive" } },
+            { description: { contains: filter.query, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.wsd_sense.count({ where }),
+    prisma.wsd_sense.findMany({
+      where,
+      skip: filter.skip,
+      take: filter.take,
+      orderBy: [{word: "asc"}, { sense_label: "asc" }],
+    }),
+  ]);
+
+  return {
+    items: rows.map(mapWsdSense),
+    total,
+  };
+}
+
+
 export async function listWsdSenses(
   workspaceId: string,
   word?: string,
