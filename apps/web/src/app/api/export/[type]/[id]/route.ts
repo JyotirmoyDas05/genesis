@@ -1,7 +1,6 @@
 import { cookies } from 'next/headers';
 import { ACCESS_COOKIE } from '@/server/http';
-import { IS_MOCK_MODE, SERVER_API_BASE_URL } from '@/config/env';
-import { getMockExportData } from '@/server/mock-data';
+import { SERVER_API_BASE_URL } from '@/config/env';
 
 /**
  * Proxies the export blob from Spring to the browser. Server actions can't
@@ -20,17 +19,6 @@ export async function POST(
   const { type, id } = await params;
   if (!ALLOWED_TYPES.has(type)) {
     return new Response('Not found', { status: 404 });
-  }
-
-  if (IS_MOCK_MODE) {
-    const { filename, mimeType, content } = getMockExportData(type, id);
-    return new Response(content, {
-      status: 200,
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Disposition': `attachment; filename="${filename}"`,
-      },
-    });
   }
 
   const jar = await cookies();

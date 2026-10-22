@@ -1,8 +1,16 @@
 import type { NextConfig } from "next";
 
+// Docker images consume the standalone bundle. On Windows accounts without
+// SeCreateSymbolicLinkPrivilege Next's standalone tracing fails with EPERM;
+// `NEXT_STANDALONE=false next build` skips that bundle for local verification.
+const standalone = process.env.NEXT_STANDALONE !== "false";
+
 const nextConfig: NextConfig = {
-  // Enable standalone output for Docker deployment
-  output: 'standalone',
+  output: standalone ? "standalone" : undefined,
+  logging: {
+    // Show full URLs for server-side fetches (Server Actions / RSC -> API).
+    fetches: { fullUrl: true },
+  },
   experimental: {
     serverActions: {
       // Document uploads (TXT / CoNLL-2012 / XMI corpora) flow through the
