@@ -45,6 +45,7 @@ import type {
   UserEntity,
   WorkspaceEntity,
   WorkspaceMemberEntity,
+  WsdAnnotationDetailEntity,
   WsdAnnotationEntity,
   WsdSenseEntity,
 } from "./types.js";
@@ -1565,6 +1566,84 @@ export async function countWsdAnnotationsBySense(senseId: string): Promise<numbe
   return prisma.wsd_annotation.count({ where: { sense_id: senseId } });
 }
 
+export interface WsdProgressStats {
+  /** Tokens in the document whose exact form is in the workspace lexicon. */
+  ambiguousTotal: number;
+  /** Distinct ambiguous tokens with at least one annotation. */
+  annotated: number;
+}
+
+/**
+ * Progress for a WSD document: annotated ambiguous tokens / all ambiguous
+ * tokens. A token is ambiguous when its form matches a sense word in the
+ * workspace (case-insensitive). Counting distinct tokens means multiple
+ * annotators voting on the same token do not inflate progress.
+ *
+ * The lexicon is joined inside PostgreSQL instead of being sent as a list of
+ * bind parameters: a Hemkosh-sized dictionary has far more headwords than the
+ * 32,767-parameter limit of a prepared statement.
+ */
+export async function countWsdDocumentProgress(
+  documentId: string,
+): Promise<WsdProgressStats> {
+  const rows = await prisma.$queryRaw<
+    Array<{ ambiguous_total: number; annotated: number }>
+  >(Prisma.sql`
+    SELECT
+      COUNT(*) FILTER (WHERE m.w IS NOT NULL)::int AS ambiguous_total,
+      COUNT(*) FILTER (
+        WHERE m.w IS NOT NULL
+          AND EXISTS (SELECT 1 FROM wsd_annotation a WHERE a.token_id = t.id)
+      )::int AS annotated
+    FROM tokens t
+    LEFT JOIN (
+      SELECT DISTINCT lower(s.word) AS w
+      FROM wsd_sense s
+      JOIN documents d ON d.workspace_id = s.workspace_id
+      WHERE d.id = ${documentId}::uuid
+    ) m ON m.w = lower(t.form)
+    WHERE t.document_id = ${documentId}::uuid
+  `);
+
+  return {
+    ambiguousTotal: rows[0]?.ambiguous_total ?? 0,
+    annotated: rows[0]?.annotated ?? 0,
+  };
+}
+
+/**
+ * Workspace-level WSD coverage. This is token-weighted rather than an average
+ * of per-document percentages, so a document with no ambiguous occurrences
+ * does not drag the workspace down.
+ */
+export async function countWsdWorkspaceProgress(
+  workspaceId: string,
+): Promise<WsdProgressStats> {
+  const rows = await prisma.$queryRaw<
+    Array<{ ambiguous_total: number; annotated: number }>
+  >(Prisma.sql`
+    SELECT
+      COUNT(*) FILTER (WHERE m.w IS NOT NULL)::int AS ambiguous_total,
+      COUNT(*) FILTER (
+        WHERE m.w IS NOT NULL
+          AND EXISTS (SELECT 1 FROM wsd_annotation a WHERE a.token_id = t.id)
+      )::int AS annotated
+    FROM tokens t
+    JOIN documents d ON d.id = t.document_id
+    LEFT JOIN (
+      SELECT DISTINCT lower(word) AS w
+      FROM wsd_sense
+      WHERE workspace_id = ${workspaceId}::uuid
+    ) m ON m.w = lower(t.form)
+    WHERE d.workspace_id = ${workspaceId}::uuid
+  `);
+
+  return {
+    ambiguousTotal: rows[0]?.ambiguous_total ?? 0,
+    annotated: rows[0]?.annotated ?? 0,
+  };
+}
+
 export async function deleteWsdSense(id: string): Promise<void> {
   // wsd_annotation.sense_id cascades.
   await prisma.wsd_sense.deleteMany({ where: { id } });
@@ -1663,6 +1742,99 @@ export async function listWsdByWorkspace(workspaceId: string): Promise<WsdAnnota
     orderBy: { created_at: "asc" },
   });
   return rows.map(mapWsdAnnotation);
+}
+
+/**
+ * One row per annotation with everything the occurrence export needs. The
+ * sentence text is fetched in a second query keyed by document to avoid an
+ * N+1 lookup per annotation.
+ */
+export async function listWsdAnnotationDetails(
+  workspaceId: string,
+): Promise<WsdAnnotationDetailEntity[]> {
+  const rows = await prisma.wsd_annotation.findMany({
+    where: { workspace_id: workspaceId },
+    include: {
+      tokens: {
+        select: {
+          id: true,
+          form: true,
+          sentenceIndex: true,
+          tokenIndex: true,
+          documentId: true,
+          document: { select: { name: true } },
+        },
+      },
+      wsd_sense: {
+        select: {
+          id: true,
+          sense_label: true,
+          gloss: true,
+          examples: true,
+        },
+      },
+    },
+    orderBy: { created_at: "asc" },
+  });
+
+  const documentIds = [...new Set(rows.map((row) => row.tokens.documentId))];
+  const sentences = documentIds.length
+    ? await prisma.sentence.findMany({
+        where: { documentId: { in: documentIds } },
+        select: { documentId: true, sentenceIndex: true, text: true },
+      })
+    : [];
+  const sentenceText = new Map(
+    sentences.map((sentence) => [
+      `${sentence.documentId}\u0000${sentence.sentenceIndex}`,
+      sentence.text ?? "",
+    ]),
+  );
+
+  const annotatorIds = [...new Set(rows.map((row) => row.annotator_id))];
+  const annotators = annotatorIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: annotatorIds } },
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      })
+    : [];
+  const annotatorNames = new Map(
+    annotators.map((annotator) => [
+      annotator.id,
+      [annotator.firstName, annotator.lastName].filter(Boolean).join(" ").trim() ||
+        annotator.username ||
+        annotator.email ||
+        annotator.id,
+    ]),
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    workspaceId: row.workspace_id,
+    documentId: row.tokens.documentId,
+    documentName: row.tokens.document.name,
+    sentenceIndex: row.tokens.sentenceIndex,
+    tokenIndex: row.tokens.tokenIndex,
+    tokenId: row.token_id,
+    word: row.tokens.form,
+    sentenceText:
+      sentenceText.get(
+        `${row.tokens.documentId}\u0000${row.tokens.sentenceIndex}`,
+      ) ?? "",
+    senseId: row.sense_id,
+    senseLabel: row.wsd_sense.sense_label,
+    senseGloss: row.wsd_sense.gloss,
+    senseExamples: row.wsd_sense.examples,
+    annotatorId: row.annotator_id,
+    annotatorName: annotatorNames.get(row.annotator_id) ?? row.annotator_id,
+    timestamp: requiredIso(row.timestamp),
+  }));
 }
 
 export async function listWsdAnnotationsForDocument(

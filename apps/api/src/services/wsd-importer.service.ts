@@ -1,6 +1,11 @@
+import { decodeTextBytes } from "./text-encoding.js";
+import { parseSenseWorkbook } from "./wsd-sense-import.service.js";
+
 /**
  * Service for parsing and bulk importing dictionary senses (e.g. Hemkosh OCR datasets).
- * Supports JSON array, JSON Lines (JSONL), and CSV / TSV files.
+ * Supports JSON array, JSON Lines (JSONL), CSV / TSV files, and the original
+ * Assamese ambiguous-word `.xls`/`.xlsx` template (one word with up to seven
+ * Assamese/English sense pairs).
  */
 
 export interface RawSenseInput {
@@ -20,12 +25,28 @@ export interface ImportSensesResult {
 /**
  * Parses raw file content (JSON, JSONL, or CSV/TSV) into normalized RawSenseInput entries.
  */
-export function parseSenseImportContent(content: string, filename?: string): RawSenseInput[] {
+export function parseSenseImportContent(
+  content: string | Uint8Array,
+  filename?: string,
+): RawSenseInput[] {
+  const lowerName = (filename || '').toLowerCase();
+
+  if (content instanceof Uint8Array) {
+    if (/\.(xls|xlsx|xlsm)$/.test(lowerName)) {
+      const parsed = parseSenseWorkbook(content, filename || 'ambiguous-words.xls');
+      return parsed.rows.map((row) => ({
+        word: row.word,
+        senseLabel: row.senseLabel,
+        gloss: row.gloss,
+        examples: null,
+      }));
+    }
+    content = decodeTextBytes(content).text;
+  }
+
   // Strip UTF-8 BOM if present
   let clean = content.replace(/^\uFEFF/, '').trim();
   if (!clean) return [];
-
-  const lowerName = (filename || '').toLowerCase();
 
   // 1. JSON Array format: [ { ... }, { ... } ]
   if (clean.startsWith('[') || lowerName.endsWith('.json')) {

@@ -9,6 +9,7 @@ import {
   annotationsForDocument,
   annotationsForToken,
   createSense,
+  exportAnnotatedOccurrences,
   exportConsensus,
   exportPerAnnotator,
   exportSenses,
@@ -41,6 +42,20 @@ function parseOrThrow<T>(schema: z.ZodType<T>, body: unknown): T {
     throw new BadRequestException("Validation failed", fieldErrors);
   }
   return result.data;
+}
+
+function downloadResponse(file: {
+  body: Uint8Array | string;
+  contentType: string;
+  filename: string;
+}): Response {
+  return new Response(file.body as never, {
+    status: 200,
+    headers: {
+      "Content-Type": file.contentType,
+      "Content-Disposition": `attachment; filename="${file.filename}"`,
+    },
+  });
 }
 
 export const wsdRoutes = new Hono();
@@ -96,6 +111,20 @@ wsdRoutes.get("/workspaces/:workspaceId/wsd/senses/export", authMiddleware, asyn
   });
 });
 
+wsdRoutes.get(
+  "/workspaces/:workspaceId/wsd/export/annotations",
+  authMiddleware,
+  async (c) => {
+    return downloadResponse(
+      await exportAnnotatedOccurrences(
+        needParam(c, "workspaceId"),
+        c.get("userId"),
+        c.req.query("format") ?? "csv",
+      ),
+    );
+  },
+);
+
 wsdRoutes.post("/workspaces/:workspaceId/wsd/rejections", authMiddleware, async (c) => {
   const input = parseOrThrow(rejectSenseSchema, await c.req.json());
   await rejectSense(needParam(c, "workspaceId"), c.get("userId"), input);
@@ -139,8 +168,8 @@ wsdRoutes.post("/workspaces/:workspaceId/wsd/import", authMiddleware, async (c) 
     if (!(single instanceof File)) {
       throw new BadRequestException("Missing file field in multipart upload");
     }
-    const text = await single.text();
-    const result = await importSenses(workspaceId, userId, text, {
+    const bytes = new Uint8Array(await single.arrayBuffer());
+    const result = await importSenses(workspaceId, userId, bytes, {
       filename: single.name,
       mode,
     });

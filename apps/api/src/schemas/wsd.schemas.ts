@@ -1,10 +1,10 @@
 import { z } from "zod";
 
 export const createSenseSchema = z.object({
-  word: z.string().min(1).max(200),
-  senseLabel: z.string().min(1).max(200),
-  gloss: z.string().max(4000).nullish(),
-  examples: z.string().max(4000).nullish(),
+  word: z.string().trim().min(1).max(200),
+  senseLabel: z.string().trim().min(1).max(200),
+  gloss: z.string().trim().max(4000).nullish(),
+  examples: z.string().trim().max(4000).nullish(),
 });
 
 export type CreateSenseInput = z.infer<typeof createSenseSchema>;

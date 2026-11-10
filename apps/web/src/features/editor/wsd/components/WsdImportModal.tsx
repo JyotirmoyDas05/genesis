@@ -104,10 +104,10 @@ export function WsdImportModal({
             </div>
             <div>
               <DialogTitle className="text-base font-semibold text-slate-900 dark:text-white">
-                Import Hemkosh Dictionary Senses
+                Import Dictionary Senses
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500 dark:text-slate-400">
-                Bulk ingest OCR senses into the workspace sense inventory.
+                Bulk ingest OCR text, CSV/JSON, or the original Excel ambiguous-word template.
               </DialogDescription>
             </div>
           </div>
@@ -181,7 +181,7 @@ export function WsdImportModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".jsonl,.json,.csv,.tsv,application/json,text/csv,text/tab-separated-values"
+                accept=".jsonl,.json,.csv,.tsv,.xls,.xlsx,.xlsm,application/json,text/csv,text/tab-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={handleFileChange}
                 className="hidden"
               />
@@ -221,7 +221,9 @@ export function WsdImportModal({
                     Click to select Hemkosh dataset file
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Supports <span className="font-mono text-indigo-600 dark:text-indigo-400">.jsonl</span>,{' '}
+                    Supports <span className="font-mono text-indigo-600 dark:text-indigo-400">.xls</span>,{' '}
+                    <span className="font-mono text-indigo-600 dark:text-indigo-400">.xlsx</span>,{' '}
+                    <span className="font-mono text-indigo-600 dark:text-indigo-400">.jsonl</span>,{' '}
                     <span className="font-mono text-indigo-600 dark:text-indigo-400">.json</span>,{' '}
                     <span className="font-mono text-indigo-600 dark:text-indigo-400">.csv</span>, or{' '}
                     <span className="font-mono text-indigo-600 dark:text-indigo-400">.tsv</span>

@@ -668,6 +668,18 @@ export default function WsdEditor({ workspaceId, workspaceName }: WsdEditorProps
             <Button
               variant="outline"
               size="sm"
+              title="Download every annotation as CSV"
+              onClick={() =>
+                window.location.assign(
+                  `/api/wsd/${workspaceId}/export/annotations?format=csv`,
+                )
+              }
+            >
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={async () => {
                 await saveSession();
                 router.push(`/workspace/${workspaceId}`);

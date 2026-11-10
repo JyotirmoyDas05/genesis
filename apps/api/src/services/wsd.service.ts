@@ -18,6 +18,8 @@ import {
   findWsdAnnotation,
   findWsdSense,
   findWsdSenseByWordAndLabel,
+  listDocumentsByWorkspace,
+  listWsdAnnotationDetails,
   listWsdAnnotationsForDocument,
   listWsdAnnotationsForToken,
   listWsdByWorkspace,
@@ -31,7 +33,13 @@ import {
   saveWsdSense,
   updateWsdSense,
 } from "../store/prisma.js";
+import { onWsdAnnotationChanged } from "./document.service.js";
 import { requireAdmin, requireMember } from "./workspace.service.js";
+import {
+  buildAnnotationExport,
+  parseExportFormat,
+} from "./wsd-export.service.js";
+import type { ExportFile, WsdExportFormat } from "./wsd-export.service.js";
 import type {
   AmbiguousWordMatchDto,
   CreateSenseInput,
@@ -128,18 +136,32 @@ export async function searchSenses(
 
 
 
+/**
+ * Document progress is stored, and its denominator is the workspace's
+ * ambiguous words, so any dictionary change makes every document's value stale.
+ * This also back-fills documents annotated before progress was tracked.
+ */
+async function refreshWorkspaceWsdProgress(workspaceId: string): Promise<void> {
+  for (const doc of await listDocumentsByWorkspace(workspaceId)) {
+    await onWsdAnnotationChanged(doc.id);
+  }
+}
+
 export async function importSenses(
   workspaceId: string,
   userId: string,
-  rawContentOrEntries: string | Array<Record<string, unknown>>,
+  rawContentOrEntries: string | Uint8Array | Array<Record<string, unknown>>,
   options: { filename?: string; mode?: "skip" | "overwrite" } = {},
 ): Promise<ImportSensesResult> {
   await requireAdmin(workspaceId, userId);
-  const entries = typeof rawContentOrEntries === "string"
-    ? parseSenseImportContent(rawContentOrEntries, options.filename)
-    : rawContentOrEntries.map(normalizeSenseEntry).filter((e) => Boolean(e.word));
+  const entries =
+    typeof rawContentOrEntries === "string" || rawContentOrEntries instanceof Uint8Array
+      ? parseSenseImportContent(rawContentOrEntries, options.filename)
+      : rawContentOrEntries.map(normalizeSenseEntry).filter((e) => Boolean(e.word));
 
-  return bulkInsertWsdSenses(workspaceId, entries, { mode: options.mode });
+  const result = await bulkInsertWsdSenses(workspaceId, entries, { mode: options.mode });
+  if (result.inserted > 0 || result.updated > 0) await refreshWorkspaceWsdProgress(workspaceId);
+  return result;
 }
 
 
@@ -163,7 +185,7 @@ export async function createSense(
   await requireMember(workspaceId, userId);
   const clash = await findWsdSenseByWordAndLabel(workspaceId, input.word, input.senseLabel);
   if (clash) throw new BadRequestException("A sense with this word and label already exists");
-  return toSenseDto(
+  const created = toSenseDto(
     await saveWsdSense({
       workspaceId,
       word: input.word,
@@ -172,6 +194,8 @@ export async function createSense(
       examples: input.examples ?? null,
     }),
   );
+  await refreshWorkspaceWsdProgress(workspaceId);
+  return created;
 }
 
 export async function updateSense(
@@ -194,6 +218,10 @@ export async function updateSense(
     examples: input.examples ?? null,
   });
   if (!updated) throw new NotFoundException("Sense not found");
+  // Only a changed headword changes which tokens count as ambiguous.
+  if (row.word.toLowerCase() !== input.word.toLowerCase()) {
+    await refreshWorkspaceWsdProgress(workspaceId);
+  }
   return toSenseDto(updated);
 }
 
@@ -210,6 +238,7 @@ export async function removeSense(
     throw new ConflictException(`This sense is used by ${inUse} annotations`);
   }
   await deleteWsdSense(senseId);
+  await refreshWorkspaceWsdProgress(workspaceId);
 }
 
 export async function annotate(
@@ -223,15 +252,20 @@ export async function annotate(
   const token = await findTokenById(input.tokenId);
   if (!token) throw new NotFoundException("Token not found");
   const doc = await findDocumentById(token.documentId);
-  if (!doc) throw new NotFoundException("Document not found");
+  if (!doc || doc.workspaceId !== workspaceId) {
+    throw new NotFoundException("Token not found in this workspace");
+  }
   const row = await saveWsdAnnotation({
     workspaceId,
     tokenId: input.tokenId,
-    documentId: input.documentId ?? doc.id,
+    // Always use the token's document; a client-supplied id could point at a
+    // different document.
+    documentId: doc.id,
     senseId: input.senseId,
     annotatorId: userId,
   });
   await deleteWsdRejection(input.tokenId, input.senseId, userId);
+  await onWsdAnnotationChanged(doc.id);
   await appendLog({
     workspaceId,
     userId,
@@ -258,7 +292,10 @@ export async function rejectSense(
   const mine = (await listWsdAnnotationsForToken(workspaceId, input.tokenId)).find(
     (a) => a.annotatorId === userId && a.senseId === input.senseId,
   );
-  if (mine) await deleteWsdAnnotation(mine.id);
+  if (mine) {
+    await deleteWsdAnnotation(mine.id);
+    await onWsdAnnotationChanged(doc.id);
+  }
   await saveWsdRejection({
     workspaceId,
     documentId: doc.id,
@@ -346,7 +383,10 @@ export async function removeAnnotation(
   if (row.annotatorId !== userId && !isAdmin) {
     throw new ForbiddenException("Cannot delete another annotator's annotation");
   }
+  const documentId =
+    row.documentId ?? (await findTokenById(row.tokenId))?.documentId ?? null;
   await deleteWsdAnnotation(annotationId);
+  if (documentId) await onWsdAnnotationChanged(documentId);
 }
 
 function csvCell(value: string | null): string {
@@ -382,6 +422,49 @@ export async function exportSenses(
     lines.push([s.word, s.senseLabel, s.gloss, s.examples].map(csvCell).join(","));
   }
   return "\uFEFF" + lines.join("\r\n");
+}
+
+/**
+ * One row per WSD annotation, including document, token position, sentence
+ * context and sense text. This is the dataset export for downstream use.
+ */
+export async function exportAnnotatedOccurrences(
+  workspaceId: string,
+  userId: string,
+  format: string,
+): Promise<ExportFile> {
+  await requireMember(workspaceId, userId);
+  const details = await listWsdAnnotationDetails(workspaceId);
+  const parsedFormat: WsdExportFormat = parseExportFormat(format);
+
+  details.sort(
+    (a, b) =>
+      a.documentName.localeCompare(b.documentName) ||
+      a.sentenceIndex - b.sentenceIndex ||
+      a.tokenIndex - b.tokenIndex ||
+      a.annotatorId.localeCompare(b.annotatorId),
+  );
+
+  return buildAnnotationExport(
+    details.map((detail) => ({
+      documentId: detail.documentId,
+      documentName: detail.documentName,
+      sentenceIndex: detail.sentenceIndex,
+      tokenIndex: detail.tokenIndex,
+      tokenId: detail.tokenId,
+      word: detail.word,
+      sentenceText: detail.sentenceText,
+      senseId: detail.senseId,
+      senseLabel: detail.senseLabel,
+      senseGloss: detail.senseGloss,
+      senseExamples: detail.senseExamples,
+      annotatorId: detail.annotatorId,
+      annotatorName: detail.annotatorName,
+      timestamp: detail.timestamp,
+    })),
+    parsedFormat,
+    workspaceId,
+  );
 }
 
 /** Replace tab/newline in TSV cells so the output stays parseable. */
